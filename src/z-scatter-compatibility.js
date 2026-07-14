@@ -6,7 +6,7 @@ const POSITION_EPSILON = 0.01;
  *
  * Z Scatter exposes no public offset API, but it replaces Token#hitArea with a
  * translated copy of Token#shape whenever it scatters a Token. Reading that
- * translation lets this module compose its stand, lifted mesh, and native UI
+ * translation lets this module compose its plate, parallax mesh, and native UI
  * without touching Z Scatter settings, flags, or internal collections.
  */
 export class ZScatterCompatibility {
@@ -29,7 +29,7 @@ export class ZScatterCompatibility {
 
   /**
    * Synchronize a translated ground base plus a second selectable area around
-   * the visibly lifted Token art. Returns whether the detected scatter offset
+   * the slightly parallaxed Token art. Returns whether the detected scatter offset
    * changed, so callers can cheaply reposition their cached PIXI container.
    */
   sync({ liftX = 0, liftY = 0, enabled = true } = {}) {

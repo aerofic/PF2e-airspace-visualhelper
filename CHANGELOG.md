@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0 — Top-Down Tactical Flight Plates
+
+- Replaced the side-view raised-model composition with a top-down tactical mode: Token art now remains concentric with its rules footprint and uses at most roughly six pixels of visual parallax.
+- Rebuilt the acrylic support as a plate rim extending only 3–7 pixels beyond the Token, with refractive arcs and the circular end of the camera-aligned vertical rod.
+- Removed the continuously visible shaft body and its long ground shadow, which cannot be seen from a strict orthographic top view.
+- Rebuilt the height cast as four near-circular Token-disc shadow layers displaced toward the upper-right, plus two restrained concentric plate-contact layers.
+- Replaced the vertical projection guide with a four-arc landing ring at the exact Foundry footprint; hover and control add a bounded X-Ray treatment without changing interaction.
+- Kept native Foundry/PF2e elevation labels attached to the Token's small visual parallax and preserved Z Scatter composition, dual hit areas, drag previews, sorting, animations, reduced-motion handling, and reversible teardown.
+- Kept TokenDocument coordinates, snapping, vision, targeting, movement, distance, Actor, Item, Combat, and PF2e rules untouched.
+- Updated settings text and regression coverage for the new top-down invariants and renderer geometry.
+
 ## 0.4.16 — Cylindrical Upper-Right Shadows
 
 - Added a dedicated ground-plane shadow for the vertical acrylic shaft, running from the fixed plate into the airborne Token's height-cast shadow.

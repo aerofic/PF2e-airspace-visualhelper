@@ -17,7 +17,6 @@ export class ShadowRenderer {
       metrics.flying
       && enabled
       && ((shadow.alpha > 0)
-        || (shadow.shaftAlpha > 0)
         || (shadow.contactAlpha > 0)
         || (shadow.contactCoreAlpha > 0))
     );
@@ -36,29 +35,23 @@ export class ShadowRenderer {
       contactAlpha
     } = shadow;
 
-    // The vertical acrylic shaft casts a separate ground-plane shadow along
-    // the same light vector as the airborne model. A broad penumbra plus a
-    // tapered core creates depth without a per-Token BlurFilter.
-    drawShaftShadow(graphics, shadow);
-
-    // A rotated four-layer ellipse follows the same light vector as the
-    // cylindrical shaft shadow. The dense umbra is shifted toward the base,
-    // leaving a softer trailing edge like a solid elevated object.
-    drawTokenCastShadow(graphics, shadow, { majorScale: 1.28, minorScale: 1.38, weight: 0.22 });
-    drawTokenCastShadow(graphics, shadow, { majorScale: 1.06, minorScale: 1.13, weight: 0.48 });
-    drawTokenCastShadow(graphics, shadow, { majorScale: 0.82, minorScale: 0.82, weight: 0.78 });
+    // A horizontal Token disc retains a near-identical silhouette from above.
+    // Four nested, direction-aligned shapes supply a soft trailing penumbra
+    // and dense base-facing edge without a per-Token BlurFilter allocation.
+    drawTokenCastShadow(graphics, shadow, { majorScale: 1.18, minorScale: 1.18, weight: 0.2 });
+    drawTokenCastShadow(graphics, shadow, { majorScale: 1.07, minorScale: 1.07, weight: 0.42 });
+    drawTokenCastShadow(graphics, shadow, { majorScale: 0.94, minorScale: 0.94, weight: 0.68 });
     drawTokenCastShadow(graphics, shadow, {
-      majorScale: 0.62,
-      minorScale: 0.62,
-      weight: 0.92,
-      offsetAlong: -radiusX * 0.12
+      majorScale: 0.78,
+      minorScale: 0.78,
+      weight: 0.86,
+      offsetAlong: -radiusX * 0.09
     });
 
-    // The outer contact shadow marks the exact ground footprint. A tighter
-    // core supplies physical weight at the acrylic plate without using a
-    // per-Token blur filter.
+    // The plate contact remains concentric with the Token. Most of these fills
+    // sit behind the artwork; only a restrained grounding halo is visible.
     graphics.beginFill(SHADOW_COLOR, contactAlpha * 0.76)
-      .drawEllipse(contactX, contactY, contactRadiusX * 1.12, contactRadiusY * 1.16)
+      .drawEllipse(contactX, contactY, contactRadiusX * 1.04, contactRadiusY * 1.04)
       .endFill();
     graphics.beginFill(
       SHADOW_COLOR,
@@ -66,59 +59,10 @@ export class ShadowRenderer {
     ).drawEllipse(
       contactX,
       contactY,
-      finiteOr(shadow.contactCoreRadiusX, contactRadiusX * 0.54),
-      finiteOr(shadow.contactCoreRadiusY, contactRadiusY * 0.62)
+      finiteOr(shadow.contactCoreRadiusX, contactRadiusX * 0.86),
+      finiteOr(shadow.contactCoreRadiusY, contactRadiusY * 0.86)
     ).endFill();
   }
-}
-
-function drawShaftShadow(graphics, shadow) {
-  const startX = finiteOr(shadow?.shaftStartX, shadow?.contactX);
-  const startY = finiteOr(shadow?.shaftStartY, shadow?.contactY);
-  const endX = finiteOr(shadow?.shaftEndX, shadow?.x);
-  const endY = finiteOr(shadow?.shaftEndY, shadow?.y);
-  const alpha = Math.min(1, Math.max(0, finiteOr(shadow?.shaftAlpha, 0)));
-  const width = Math.min(64, Math.max(0, finiteOr(shadow?.shaftWidth, 0)));
-  const dx = endX - startX;
-  const dy = endY - startY;
-  const length = Math.hypot(dx, dy);
-  if (!(length > 0) || !(alpha > 0) || !(width > 0)) return;
-
-  const normalX = -dy / length;
-  const normalY = dx / length;
-  drawTaperedPolygon(graphics, {
-    startX,
-    startY,
-    endX,
-    endY,
-    normalX,
-    normalY,
-    startHalfWidth: width * 0.8,
-    endHalfWidth: width * 1.45,
-    alpha: alpha * 0.28
-  });
-  drawTaperedPolygon(graphics, {
-    startX,
-    startY,
-    endX,
-    endY,
-    normalX,
-    normalY,
-    startHalfWidth: width * 0.48,
-    endHalfWidth: width * 0.82,
-    alpha: alpha * 0.52
-  });
-  drawTaperedPolygon(graphics, {
-    startX,
-    startY,
-    endX,
-    endY,
-    normalX,
-    normalY,
-    startHalfWidth: width * 0.2,
-    endHalfWidth: width * 0.4,
-    alpha: alpha * 0.82
-  });
 }
 
 function drawTokenCastShadow(graphics, shadow, {
@@ -127,8 +71,8 @@ function drawTokenCastShadow(graphics, shadow, {
   weight,
   offsetAlong = 0
 }) {
-  const baseX = finiteOr(shadow?.shaftStartX, shadow?.contactX);
-  const baseY = finiteOr(shadow?.shaftStartY, shadow?.contactY);
+  const baseX = finiteOr(shadow?.contactX, shadow?.shaftStartX);
+  const baseY = finiteOr(shadow?.contactY, shadow?.shaftStartY);
   const x = finiteOr(shadow?.x, baseX);
   const y = finiteOr(shadow?.y, baseY);
   const dx = x - baseX;
@@ -146,7 +90,7 @@ function drawTokenCastShadow(graphics, shadow, {
   const centerX = x + (axisX * offsetAlong);
   const centerY = y + (axisY * offsetAlong);
   const points = [];
-  const segments = 24;
+  const segments = 32;
   for (let index = 0; index < segments; index += 1) {
     const angle = (index / segments) * Math.PI * 2;
     const along = Math.cos(angle) * radiusMajor;
@@ -156,27 +100,6 @@ function drawTokenCastShadow(graphics, shadow, {
       centerY + (axisY * along) + (normalY * across)
     );
   }
-  drawFilledPolygon(graphics, points, alpha);
-}
-
-function drawTaperedPolygon(graphics, data) {
-  const {
-    startX,
-    startY,
-    endX,
-    endY,
-    normalX,
-    normalY,
-    startHalfWidth,
-    endHalfWidth,
-    alpha
-  } = data;
-  const points = [
-    startX - (normalX * startHalfWidth), startY - (normalY * startHalfWidth),
-    startX + (normalX * startHalfWidth), startY + (normalY * startHalfWidth),
-    endX + (normalX * endHalfWidth), endY + (normalY * endHalfWidth),
-    endX - (normalX * endHalfWidth), endY - (normalY * endHalfWidth)
-  ];
   drawFilledPolygon(graphics, points, alpha);
 }
 

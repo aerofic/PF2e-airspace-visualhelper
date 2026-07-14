@@ -31,49 +31,49 @@ globalThis.PIXI = {
 const metrics = {
   flying: true,
   stand: {
-    topX: 30,
-    topY: -60,
+    topX: 50,
+    topY: 46,
     baseX: 50,
     baseY: 50,
-    length: Math.hypot(20, 110),
+    length: 4,
     width: 6,
     opacity: 0.5
   },
   base: {
     x: 50,
     y: 50,
-    radiusX: 28,
-    radiusY: 8,
-    thickness: 3,
-    pinLength: 9,
-    pinWidth: 4
+    radiusX: 55,
+    radiusY: 55,
+    thickness: 2,
+    innerRadiusX: 50,
+    innerRadiusY: 50,
+    rimWidth: 2
   },
-  connector: { x: 31, y: -54, length: 13, width: 8 },
-  airAccent: { x: 30, y: -60, radiusX: 18, radiusY: 4, alpha: 0.08 },
+  connector: { x: 50, y: 50, length: 0, width: 7, radius: 6 },
   shadow: {
     x: 59,
-    y: 54,
-    radiusX: 23,
-    radiusY: 7,
+    y: 31,
+    radiusX: 46,
+    radiusY: 46,
     alpha: 0.3,
     shaftStartX: 50,
     shaftStartY: 50,
-    shaftEndX: 59,
-    shaftEndY: 54,
-    shaftWidth: 4,
-    shaftAlpha: 0.5,
+    shaftEndX: 50,
+    shaftEndY: 50,
+    shaftWidth: 0,
+    shaftAlpha: 0,
     contactX: 50,
     contactY: 52,
-    contactRadiusX: 22,
-    contactRadiusY: 8,
-    contactCoreRadiusX: 10,
-    contactCoreRadiusY: 4,
-    contactAlpha: 0.24,
-    contactCoreAlpha: 0.3
+    contactRadiusX: 52,
+    contactRadiusY: 52,
+    contactCoreRadiusX: 45,
+    contactCoreRadiusY: 45,
+    contactAlpha: 0.12,
+    contactCoreAlpha: 0.09
   }
 };
 
-test("layers a restrained acrylic body, plate, pin, connector, and SCREEN highlights", () => {
+test("draws a concentric top-down acrylic rim and circular rod end", () => {
   const body = new FakeGraphics();
   const specular = new FakeGraphics();
   const renderer = new FlyingStand(body, specular);
@@ -88,12 +88,8 @@ test("layers a restrained acrylic body, plate, pin, connector, and SCREEN highli
   renderer.render(metrics, true);
   assert.equal(body.visible, true);
   assert.equal(specular.visible, true);
-  assert.equal(
-    body.commands.filter(command => command[0] === "drawPolygon").length,
-    4,
-    "shaft body, cylindrical shade plane, bottom pin, and compact connector sleeve are drawn"
-  );
-  assert.ok(body.commands.filter(command => command[0] === "drawEllipse").length >= 2);
+  assert.equal(body.commands.filter(command => command[0] === "drawPolygon").length, 0);
+  assert.ok(body.commands.filter(command => command[0] === "drawEllipse").length >= 3);
   assert.ok(specular.commands.filter(command => command[0] === "drawEllipse").length >= 3);
   assert.equal(
     [...body.commands, ...specular.commands].some(command => command[0] === "drawCircle"),
@@ -104,13 +100,19 @@ test("layers a restrained acrylic body, plate, pin, connector, and SCREEN highli
     .filter(command => command[0] === "lineStyle")
     .map(command => command[1]);
   assert.ok(lineWidths.length >= 5);
-  assert.ok(Math.max(...lineWidths) <= 1.5, "no wide laser-like stroke is emitted");
-  assert.equal(lineWidths.at(-1), 0, "the air accent must not inherit a bright shaft outline");
+  assert.ok(Math.max(...lineWidths) <= 3.5, "top-down rim stays bounded and cannot become a laser rod");
   assert.ok(
     Math.max(...body.commands
       .filter(command => command[0] === "beginFill")
-      .map(command => command[2])) >= 0.19,
-    "acrylic plate should retain the denser physical treatment"
+      .map(command => command[2])) <= 0.11,
+    "the plate fill stays transparent beneath Token art"
+  );
+
+  const normalLineCount = specular.commands.filter(command => command[0] === "lineTo").length;
+  renderer.render(metrics, true, { emphasized: true });
+  assert.ok(
+    specular.commands.filter(command => command[0] === "lineTo").length > normalLineCount,
+    "hover or control adds only the short X-ray rim spokes"
   );
 
   renderer.render(metrics, false);
@@ -120,7 +122,7 @@ test("layers a restrained acrylic body, plate, pin, connector, and SCREEN highli
   assert.deepEqual(specular.commands, []);
 });
 
-test("uses three shaft, four Token, and two contact shadow layers without filters", () => {
+test("uses four top-down Token and two concentric contact shadow layers without filters", () => {
   const graphics = new FakeGraphics();
   const renderer = new ShadowRenderer(graphics);
 
@@ -133,18 +135,15 @@ test("uses three shaft, four Token, and two contact shadow layers without filter
   assert.equal(graphics.visible, true);
   assert.equal(
     graphics.commands.filter(command => command[0] === "beginFill").length,
-    9
+    6
   );
-  assert.equal(graphics.commands.filter(command => command[0] === "drawPolygon").length, 7);
+  assert.equal(graphics.commands.filter(command => command[0] === "drawPolygon").length, 4);
   const fills = graphics.commands.filter(command => command[0] === "beginFill");
   assert.ok(
     fills.every(command => command[2] > 0 && command[2] <= 0.42),
     "each physical layer remains translucent even though their overlap is dense"
   );
-  const shaftOpacity = fills.slice(0, 3)
-    .reduce((combined, command) => 1 - ((1 - combined) * (1 - command[2])), 0);
-  assert.ok(shaftOpacity > 0.45, "shaft shadow should read as a strong physical cast shadow");
-  const castOpacity = fills.slice(3, 7)
+  const castOpacity = fills.slice(0, 4)
     .reduce((combined, command) => 1 - ((1 - combined) * (1 - command[2])), 0);
   assert.ok(castOpacity > 0.35, "layered cast shadow should remain clearly readable");
 

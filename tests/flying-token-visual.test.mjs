@@ -382,22 +382,23 @@ test("anchors non-rectangular Token shapes to Foundry's actual local center", ()
   assert.deepEqual([token.mesh.x, token.mesh.y], [token.center.x, token.center.y]);
 });
 
-test("renders layered acrylic material, restrained highlights, and dual shadow groups", () => {
+test("renders a concentric acrylic rim, top-view rod end, and displaced disc shadow", () => {
   const token = makeToken(60);
   const visual = new FlyingTokenVisual(token, settings);
-  const standPolygons = visual.standGraphics.commands.filter(command => command[0] === "drawPolygon");
+  const standEllipses = visual.standGraphics.commands.filter(command => command[0] === "drawEllipse");
   const specularLines = visual.standSpecularGraphics.commands
     .filter(command => command[0] === "lineStyle");
   const shadowFills = visual.shadowGraphics.commands.filter(command => command[0] === "beginFill");
 
-  assert.ok(standPolygons.length >= 3);
+  assert.equal(visual.standGraphics.commands.filter(command => command[0] === "drawPolygon").length, 0);
+  assert.ok(standEllipses.length >= 3);
   assert.ok(specularLines.length >= 5);
-  assert.ok(Math.max(...specularLines.map(command => command[1])) <= 1.5);
+  assert.ok(Math.max(...specularLines.map(command => command[1])) <= 3.5);
   assert.equal(visual.standSpecularGraphics.blendMode, "screen");
-  assert.equal(shadowFills.length, 9);
+  assert.equal(shadowFills.length, 6);
   assert.equal(
     visual.shadowGraphics.commands.filter(command => command[0] === "drawPolygon").length,
-    7
+    4
   );
   assert.ok(Math.max(...shadowFills.map(command => command[2])) > 0.1);
   assert.equal(
@@ -807,7 +808,7 @@ test("respects an immediate elevation update when animation is disabled", () => 
   assert.equal(token.children.length, 0);
   assert.equal(readyCanvas.primary.children.length, 1);
   const stand = readyCanvas.primary.children[0].children[2];
-  assert.ok(stand.commands.some(command => command[0] === "drawPolygon"));
+  assert.ok(stand.commands.some(command => command[0] === "drawEllipse"));
   layer.deactivate(readyCanvas);
 });
 
@@ -824,8 +825,7 @@ test("samples core elevation frames and hides geometry for secret Tokens", () =>
   const layer = new FlyingVisualLayer();
   layer.activate(readyCanvas);
   const visualContainer = readyCanvas.primary.children[0];
-  const stand = visualContainer.children[3];
-  const initialTopY = minimumLineY(stand);
+  const initialMeshY = token.mesh.y;
   layer.onUpdateToken(token.document, { elevation: 60 }, {}, "user");
 
   token.document.elevation = 30;
@@ -835,8 +835,7 @@ test("samples core elevation frames and hides geometry for secret Tokens", () =>
   token.document.elevation = 60;
   token.animationContexts.clear();
   layer.onRefreshToken(token, { refreshElevation: true });
-  const finalTopY = minimumLineY(stand);
-  assert.ok(finalTopY < initialTopY);
+  assert.ok(token.mesh.y < initialMeshY);
 
   token.document.isSecret = true;
   layer.onRefreshToken(token, { refreshState: true });
@@ -993,10 +992,4 @@ function comparePrimaryDisplayObjects(left, right) {
   return (Number(left.elevation) - Number(right.elevation))
     || (Number(left.sortLayer) - Number(right.sortLayer))
     || (Number(left.sort) - Number(right.sort));
-}
-
-function minimumLineY(graphics) {
-  return Math.min(...graphics.commands
-    .filter(command => ["moveTo", "lineTo"].includes(command[0]))
-    .map(command => command[2]));
 }

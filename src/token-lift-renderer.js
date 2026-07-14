@@ -1,12 +1,12 @@
 import { VISUAL_EPSILON } from "./constants.js";
 
-// Position follows the lifted artwork, while Foundry/PF2e keeps exclusive
+// Position follows the artwork's small top-view parallax, while Foundry/PF2e keeps exclusive
 // ownership of label content, units, visibility, alpha, and text styling.
 const ART_UI_KEYS = ["tooltip", "levelIndicator", "nameplate", "bars", "effects"];
 const SIZE_REFRESHED_UI_KEYS = new Set(["tooltip", "levelIndicator", "nameplate"]);
 
 /**
- * Applies a reversible visual offset to Foundry's Primary Token mesh and the
+ * Applies a reversible top-view parallax to Foundry's Primary Token mesh and the
  * non-interactive UI which visually belongs to the artwork.
  *
  * TokenDocument coordinates, the Token container, hit area, border, targeting,

@@ -2,14 +2,14 @@ const ACRYLIC_BODY_COLOR = 0xcce7ec;
 const ACRYLIC_EDGE_COLOR = 0x8eb6c0;
 const ACRYLIC_HIGHLIGHT_COLOR = 0xf4ffff;
 const ACRYLIC_UNDERSIDE_COLOR = 0x627b82;
-const AIR_ACCENT_COLOR = 0xa9d7df;
 
 /**
- * Draws one layered acrylic tabletop stand without reading Foundry documents.
+ * Draw a top-down acrylic flight plate.
  *
- * The low-alpha body and the refractive highlights deliberately live in
- * separate Graphics objects. This keeps the shaft transparent while allowing
- * a narrow SCREEN highlight to stay legible on both dark and light maps.
+ * A vertical support is coincident with the camera axis in Foundry's
+ * orthographic view, so V0.5 deliberately does not draw its side length. The
+ * plate rim, central rod end and optional X-ray spokes are the physically
+ * plausible features visible from above.
  */
 export class FlyingStand {
   constructor(bodyGraphics, specularGraphics) {
@@ -28,293 +28,148 @@ export class FlyingStand {
     );
   }
 
-  render(metrics, enabled) {
+  render(metrics, enabled, { emphasized = false } = {}) {
     const body = this.bodyGraphics;
     const specular = this.specularGraphics;
     body.clear();
     specular.clear();
 
-    const visible = Boolean(
-      metrics.flying
-      && enabled
-      && (metrics.stand.opacity > 0)
-      && (metrics.stand.length > 0)
-    );
+    const opacity = clamp(finiteOr(metrics?.stand?.opacity, 0), 0, 1);
+    const radiusX = Math.max(0, finiteOr(metrics?.base?.radiusX, 0));
+    const radiusY = Math.max(0, finiteOr(metrics?.base?.radiusY, 0));
+    const visible = Boolean(metrics.flying && enabled && (opacity > 0) && (radiusX > 0) && (radiusY > 0));
     body.visible = visible;
     specular.visible = visible;
     if (!visible) return;
 
-    const { topX, topY, baseX, baseY, length, opacity } = metrics.stand;
-    const width = Math.max(1, finiteOr(metrics.stand.width, 1));
-    const dx = baseX - topX;
-    const dy = baseY - topY;
-    const unitX = length > 0 ? dx / length : 0;
-    const unitY = length > 0 ? dy / length : 1;
-    const normalX = finiteOr(metrics.stand.normalX, -unitY);
-    const normalY = finiteOr(metrics.stand.normalY, unitX);
-
-    drawShaftBody(body, {
-      topX,
-      topY,
-      baseX,
-      baseY,
-      normalX,
-      normalY,
-      width,
-      opacity
-    });
-    drawBase(body, specular, metrics.base, { opacity, width });
-    drawBottomPin(body, specular, metrics.base, {
-      baseX,
-      baseY,
-      unitX,
-      unitY,
-      normalX,
-      normalY,
+    drawTopDownPlate(body, specular, metrics.base, {
       opacity,
-      width
+      lineWidth: Math.max(1, finiteOr(metrics.stand.width, 1)),
+      emphasized
     });
-    drawTopConnector(body, specular, metrics.connector, {
-      topX,
-      topY,
-      length,
-      unitX,
-      unitY,
-      normalX,
-      normalY,
-      opacity,
-      width
-    });
-    drawRefractiveEdges(specular, {
-      topX,
-      topY,
-      baseX,
-      baseY,
-      normalX,
-      normalY,
-      width,
-      opacity
-    });
-    drawAirAccent(specular, metrics.airAccent ?? metrics.liftGlow, opacity);
+    drawRodEnd(body, specular, metrics.connector, { opacity, emphasized });
   }
 }
 
-function drawShaftBody(graphics, data) {
-  const {
-    topX,
-    topY,
-    baseX,
-    baseY,
-    normalX,
-    normalY,
-    width,
-    opacity
-  } = data;
-  const topHalf = width * 0.22;
-  const baseHalf = width * 0.46;
-
-  // A subtly tapered sheet reads as transparent acrylic instead of a neon
-  // line. Even at opacity 1 the broad body never becomes opaque.
-  drawFilledPolygon(graphics, [
-    topX - (normalX * topHalf), topY - (normalY * topHalf),
-    topX + (normalX * topHalf), topY + (normalY * topHalf),
-    baseX + (normalX * baseHalf), baseY + (normalY * baseHalf),
-    baseX - (normalX * baseHalf), baseY - (normalY * baseHalf)
-  ], ACRYLIC_BODY_COLOR, Math.min(0.16, opacity * 0.22));
-
-  // A cylindrical dark-side strip complements the bright refractive edge.
-  // The darker right-hand plane complements the narrow highlight and makes
-  // the transparent support read as a cylindrical acrylic rod.
-  drawFilledPolygon(graphics, [
-    topX - (normalX * topHalf * 0.08), topY - (normalY * topHalf * 0.08),
-    topX - (normalX * topHalf), topY - (normalY * topHalf),
-    baseX - (normalX * baseHalf), baseY - (normalY * baseHalf),
-    baseX - (normalX * baseHalf * 0.08), baseY - (normalY * baseHalf * 0.08)
-  ], ACRYLIC_UNDERSIDE_COLOR, Math.min(0.22, opacity * 0.34));
-}
-
-function drawRefractiveEdges(graphics, data) {
-  const {
-    topX,
-    topY,
-    baseX,
-    baseY,
-    normalX,
-    normalY,
-    width,
-    opacity
-  } = data;
-  const edgeOffset = width * 0.4;
-  const edgeWidth = clamp(width * 0.2, 1, 1.5);
-
-  graphics.lineStyle(edgeWidth, ACRYLIC_EDGE_COLOR, Math.min(0.48, opacity * 0.68))
-    .moveTo(topX - (normalX * edgeOffset), topY - (normalY * edgeOffset))
-    .lineTo(baseX - (normalX * edgeOffset), baseY - (normalY * edgeOffset));
-  graphics.lineStyle(edgeWidth, ACRYLIC_EDGE_COLOR, Math.min(0.4, opacity * 0.54))
-    .moveTo(topX + (normalX * edgeOffset), topY + (normalY * edgeOffset))
-    .lineTo(baseX + (normalX * edgeOffset), baseY + (normalY * edgeOffset));
-
-  // The highlight is deliberately narrow and off-axis. There is no wide glow
-  // stroke, so overlapping the projection line cannot form a laser-like rod.
-  const highlightOffset = width * 0.14;
-  graphics.lineStyle(
-    clamp(width * 0.14, 0.75, 1.15),
-    ACRYLIC_HIGHLIGHT_COLOR,
-    Math.min(0.62, opacity * 0.9)
-  )
-    .moveTo(topX + (normalX * highlightOffset), topY + (normalY * highlightOffset))
-    .lineTo(baseX + (normalX * highlightOffset), baseY + (normalY * highlightOffset));
-}
-
-function drawBase(body, specular, base, { opacity, width }) {
-  const radiusX = Math.max(0, finiteOr(base?.radiusX, 0));
-  const radiusY = Math.max(0, finiteOr(base?.radiusY, 0));
-  if ((radiusX === 0) || (radiusY === 0)) return;
-
+function drawTopDownPlate(body, specular, base, { opacity, lineWidth, emphasized }) {
   const x = finiteOr(base?.x, 0);
   const y = finiteOr(base?.y, 0);
-  const thickness = clamp(
-    finiteOr(base?.thickness, radiusY * 0.32),
-    0,
-    Math.max(0, radiusY * 0.65)
-  );
+  const radiusX = Math.max(0, finiteOr(base?.radiusX, 0));
+  const radiusY = Math.max(0, finiteOr(base?.radiusY, 0));
+  const innerRadiusX = clamp(finiteOr(base?.innerRadiusX, radiusX * 0.9), 0, radiusX);
+  const innerRadiusY = clamp(finiteOr(base?.innerRadiusY, radiusY * 0.9), 0, radiusY);
+  const rimWidth = clamp(finiteOr(base?.rimWidth, lineWidth * 0.5), 1, 4);
+  const emphasis = emphasized ? 1.55 : 1;
 
-  // A visibly denser underside and top surface give the plate physical
-  // presence while preserving enough transparency to read the map beneath.
-  body.beginFill(ACRYLIC_UNDERSIDE_COLOR, Math.min(0.26, opacity * 0.38))
-    .drawEllipse(x, y + thickness, radiusX, radiusY)
-    .endFill();
-  body.beginFill(ACRYLIC_BODY_COLOR, Math.min(0.22, opacity * 0.34))
-    .drawEllipse(x, y, radiusX, radiusY)
-    .endFill();
+  // Almost the entire fill lives behind the Token art. Only the few-pixel
+  // overshoot and refractive edge remain visible in the normal top-down view.
+  body.beginFill(
+    ACRYLIC_UNDERSIDE_COLOR,
+    Math.min(0.11, opacity * 0.12 * emphasis)
+  ).drawEllipse(x, y, radiusX, radiusY).endFill();
+  body.beginFill(
+    ACRYLIC_BODY_COLOR,
+    Math.min(0.08, opacity * 0.09 * emphasis)
+  ).drawEllipse(x, y, innerRadiusX, innerRadiusY).endFill();
 
   specular.lineStyle(
-    clamp(width * 0.22, 1, 1.5),
+    rimWidth,
     ACRYLIC_EDGE_COLOR,
-    Math.min(0.52, opacity * 0.82)
-  ).drawEllipse(x, y + (thickness * 0.32), radiusX, radiusY);
+    Math.min(0.68, opacity * 0.82 * emphasis)
+  ).drawEllipse(x, y, radiusX, radiusY);
   specular.lineStyle(
-    clamp(width * 0.13, 0.75, 1),
+    Math.max(0.75, rimWidth * 0.48),
     ACRYLIC_HIGHLIGHT_COLOR,
-    Math.min(0.3, opacity * 0.48)
-  ).drawEllipse(
-    x - (radiusX * 0.025),
-    y - (radiusY * 0.12),
-    radiusX * 0.86,
-    radiusY * 0.7
-  );
+    Math.min(0.5, opacity * 0.58 * emphasis)
+  ).drawEllipse(x, y, innerRadiusX, innerRadiusY);
+
+  // Broken highlight arcs read as acrylic refraction instead of a selection
+  // ring. They also remain legible where circular Token frames cover the fill.
+  drawEllipseArc(specular, {
+    x,
+    y,
+    radiusX: radiusX * 0.985,
+    radiusY: radiusY * 0.985,
+    start: Math.PI * 1.08,
+    end: Math.PI * 1.48,
+    width: Math.max(0.9, rimWidth * 0.56),
+    color: ACRYLIC_HIGHLIGHT_COLOR,
+    alpha: Math.min(0.72, opacity * 0.92 * emphasis)
+  });
+  drawEllipseArc(specular, {
+    x,
+    y,
+    radiusX: radiusX * 0.985,
+    radiusY: radiusY * 0.985,
+    start: Math.PI * 0.08,
+    end: Math.PI * 0.3,
+    width: Math.max(0.75, rimWidth * 0.42),
+    color: ACRYLIC_EDGE_COLOR,
+    alpha: Math.min(0.42, opacity * 0.54 * emphasis)
+  });
+
+  if (emphasized) drawXraySpokes(specular, { x, y, radiusX, radiusY, rimWidth, opacity });
 }
 
-function drawBottomPin(body, specular, base, data) {
-  const {
-    baseX,
-    baseY,
-    unitX,
-    unitY,
-    normalX,
-    normalY,
-    opacity,
-    width
-  } = data;
-  const baseRadiusY = Math.max(0, finiteOr(base?.radiusY, 0));
-  const length = clamp(
-    finiteOr(base?.pinLength, Math.max(width * 1.35, baseRadiusY * 0.7)),
-    width * 0.8,
-    Math.max(width * 2.2, baseRadiusY * 1.25)
-  );
-  const halfWidth = Math.max(0.65, finiteOr(base?.pinWidth, width * 0.54) / 2);
-  const innerX = baseX - (unitX * length);
-  const innerY = baseY - (unitY * length);
+function drawRodEnd(body, specular, connector, { opacity, emphasized }) {
+  const x = finiteOr(connector?.x, 0);
+  const y = finiteOr(connector?.y, 0);
+  const radius = Math.max(0, finiteOr(connector?.radius, connector?.width * 0.5));
+  if (!(radius > 0)) return;
+  const emphasis = emphasized ? 1.65 : 1;
 
-  drawFilledPolygon(body, orientedQuad({
-    ax: baseX,
-    ay: baseY,
-    bx: innerX,
-    by: innerY,
-    normalX,
-    normalY,
-    halfWidth
-  }), ACRYLIC_BODY_COLOR, Math.min(0.2, opacity * 0.32));
+  // In a true top view the vertical rod is visible only as its circular end.
+  // It usually remains beneath Token art, becoming an X-ray cue when exposed.
+  body.beginFill(ACRYLIC_UNDERSIDE_COLOR, Math.min(0.18, opacity * 0.2 * emphasis))
+    .drawEllipse(x, y, radius, radius)
+    .endFill();
   specular.lineStyle(
-    clamp(width * 0.16, 0.8, 1.2),
-    ACRYLIC_EDGE_COLOR,
-    Math.min(0.42, opacity * 0.68)
-  ).moveTo(innerX, innerY).lineTo(baseX, baseY);
+    Math.max(0.8, radius * 0.18),
+    ACRYLIC_HIGHLIGHT_COLOR,
+    Math.min(0.62, opacity * 0.76 * emphasis)
+  ).drawEllipse(x, y, radius, radius);
 }
 
-function drawTopConnector(body, specular, connector, data) {
-  const {
-    topX,
-    topY,
-    length: standLength,
-    unitX,
-    unitY,
-    normalX,
-    normalY,
-    opacity,
-    width
-  } = data;
-  const length = clamp(
-    finiteOr(connector?.length, Math.min(width * 2.1, standLength * 0.12)),
-    width,
-    Math.max(width, standLength * 0.22)
+function drawXraySpokes(graphics, { x, y, radiusX, radiusY, rimWidth, opacity }) {
+  graphics.lineStyle(
+    Math.max(0.75, rimWidth * 0.4),
+    ACRYLIC_EDGE_COLOR,
+    Math.min(0.34, opacity * 0.46)
   );
-  const connectorWidth = Math.max(width * 0.72, finiteOr(connector?.width, width * 1.2));
-  const centerX = finiteOr(connector?.x, topX + (unitX * length * 0.5));
-  const centerY = finiteOr(connector?.y, topY + (unitY * length * 0.5));
-  const ax = centerX - (unitX * length * 0.5);
-  const ay = centerY - (unitY * length * 0.5);
-  const bx = centerX + (unitX * length * 0.5);
-  const by = centerY + (unitY * length * 0.5);
-
-  drawFilledPolygon(body, orientedQuad({
-    ax,
-    ay,
-    bx,
-    by,
-    normalX,
-    normalY,
-    halfWidth: connectorWidth * 0.5
-  }), ACRYLIC_BODY_COLOR, Math.min(0.22, opacity * 0.34));
-  specular.lineStyle(
-    clamp(width * 0.18, 0.9, 1.3),
-    ACRYLIC_EDGE_COLOR,
-    Math.min(0.46, opacity * 0.72)
-  ).moveTo(ax + (normalX * connectorWidth * 0.38), ay + (normalY * connectorWidth * 0.38))
-    .lineTo(bx + (normalX * connectorWidth * 0.38), by + (normalY * connectorWidth * 0.38));
-}
-
-function drawAirAccent(graphics, accent, standOpacity) {
-  if (!accent || !(accent.alpha > 0) || !(accent.radiusX > 0) || !(accent.radiusY > 0)) return;
-  // PIXI Graphics retains the previous shaft highlight lineStyle; explicitly
-  // clear it so the subtle lower-rim fill cannot acquire a bright white ring.
-  graphics.lineStyle(0);
-  graphics.beginFill(
-    AIR_ACCENT_COLOR,
-    Math.min(0.1, accent.alpha, standOpacity * 0.2)
-  ).drawEllipse(accent.x, accent.y, accent.radiusX, accent.radiusY).endFill();
-}
-
-function orientedQuad({ ax, ay, bx, by, normalX, normalY, halfWidth }) {
-  return [
-    ax - (normalX * halfWidth), ay - (normalY * halfWidth),
-    ax + (normalX * halfWidth), ay + (normalY * halfWidth),
-    bx + (normalX * halfWidth), by + (normalY * halfWidth),
-    bx - (normalX * halfWidth), by - (normalY * halfWidth)
-  ];
-}
-
-function drawFilledPolygon(graphics, points, color, alpha) {
-  graphics.beginFill(color, alpha);
-  if (typeof graphics.drawPolygon === "function") graphics.drawPolygon(points);
-  else {
-    graphics.moveTo(points[0], points[1]);
-    for (let index = 2; index < points.length; index += 2) {
-      graphics.lineTo(points[index], points[index + 1]);
-    }
-    graphics.lineTo(points[0], points[1]);
+  for (const angle of [0, Math.PI / 2, Math.PI, Math.PI * 1.5]) {
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    graphics.moveTo(
+      x + (cos * radiusX * 0.82),
+      y + (sin * radiusY * 0.82)
+    ).lineTo(
+      x + (cos * radiusX * 0.98),
+      y + (sin * radiusY * 0.98)
+    );
   }
-  graphics.endFill();
+}
+
+function drawEllipseArc(graphics, {
+  x,
+  y,
+  radiusX,
+  radiusY,
+  start,
+  end,
+  width,
+  color,
+  alpha
+}) {
+  if (!(radiusX > 0) || !(radiusY > 0) || !(alpha > 0) || !(end > start)) return;
+  const segments = 12;
+  graphics.lineStyle(width, color, alpha);
+  for (let index = 0; index <= segments; index += 1) {
+    const angle = start + (((end - start) * index) / segments);
+    const px = x + (Math.cos(angle) * radiusX);
+    const py = y + (Math.sin(angle) * radiusY);
+    if (index === 0) graphics.moveTo(px, py);
+    else graphics.lineTo(px, py);
+  }
 }
 
 function blendMode(name, fallback) {

@@ -124,7 +124,7 @@ test("lift, stand length, and bounded shadow drift grow with elevation", () => {
   assert.ok(low.shadow.y < low.base.y);
 });
 
-test("keeps the acrylic base at the Token footprint while raising the art vertically", () => {
+test("keeps the acrylic plate concentric while applying only bounded top-view parallax", () => {
   for (const elevation of [10, 60, 120]) {
     const metrics = calculateVisualMetrics({ ...base, elevation });
     assert.deepEqual([metrics.base.x, metrics.base.y], [50, 50]);
@@ -132,6 +132,7 @@ test("keeps the acrylic base at the Token footprint while raising the art vertic
     assert.deepEqual([metrics.projection.endX, metrics.projection.endY], [50, 50]);
     assert.equal(metrics.token.offsetX, 0);
     assert.ok(metrics.token.offsetY < 0);
+    assert.ok(Math.abs(metrics.token.offsetY) <= 6);
     assert.equal(metrics.stand.topX, metrics.stand.baseX);
     assert.ok(metrics.stand.topY < metrics.stand.baseY);
     assert.deepEqual(
@@ -190,7 +191,7 @@ test("keeps pathological custom Token dimensions vertical and finite", () => {
   assert.ok(Number.isFinite(pose.lift));
 });
 
-test("raises elongated 1x4 and 2x3 Token art fully above its fixed base", () => {
+test("keeps elongated Token art over its concentric plate instead of exposing a side-view stand", () => {
   for (const [tokenWidth, tokenHeight] of [[100, 400], [200, 300]]) {
     const pose = calculateFlightPose({
       elevation: 5,
@@ -199,13 +200,15 @@ test("raises elongated 1x4 and 2x3 Token art fully above its fixed base", () => 
       tokenWidth,
       tokenHeight
     });
-    const raisedArtBottom = pose.tokenCenter.y + (tokenHeight / 2);
-    assert.ok(raisedArtBottom < pose.ground.y);
+    assert.ok(pose.lift > 0);
+    assert.ok(pose.lift <= 6);
+    assert.equal(pose.tokenOffset.y, -pose.lift);
+    assert.ok(pose.tokenCenter.y + (tokenHeight / 2) > pose.ground.y);
     assert.deepEqual(pose.standTop, pose.tokenCenter);
   }
 });
 
-test("all supported footprint shapes get the same bottom-edge clearance at five feet and above", () => {
+test("all supported footprint shapes receive the same grid-relative top-view parallax", () => {
   const dimensions = [
     [100, 100], // 1x1
     [200, 200], // 2x2
@@ -214,19 +217,18 @@ test("all supported footprint shapes get the same bottom-edge clearance at five 
   ];
 
   for (const elevation of [5, 30, 100]) {
-    const clearances = dimensions.map(([tokenWidth, tokenHeight]) => {
+    const parallax = dimensions.map(([tokenWidth, tokenHeight]) => {
       const metrics = calculateVisualMetrics({
         ...base,
         elevation,
         tokenWidth,
         tokenHeight
       });
-      const artBottom = metrics.token.centerY + (tokenHeight / 2);
-      return metrics.base.y - artBottom;
+      return -metrics.token.offsetY;
     });
-    assert.ok(clearances.every(clearance => clearance > 0));
-    for (const clearance of clearances.slice(1)) {
-      assertApproximatelyEqual(clearance, clearances[0], 1e-9);
+    assert.ok(parallax.every(offset => (offset > 0) && (offset <= 6)));
+    for (const offset of parallax.slice(1)) {
+      assertApproximatelyEqual(offset, parallax[0], 1e-9);
     }
   }
 });
@@ -237,8 +239,8 @@ test("airborne perspective scale and alpha are subtle and monotonic", () => {
 
   for (const metrics of samples) {
     assert.ok(metrics.token.scale >= 1);
-    assert.ok(metrics.token.scale <= 1.04);
-    assert.ok(metrics.token.alpha >= 0.95);
+    assert.ok(metrics.token.scale <= 1.025);
+    assert.ok(metrics.token.alpha >= 0.982);
     assert.ok(metrics.token.alpha <= 1);
   }
   for (let index = 1; index < samples.length; index += 1) {
@@ -247,7 +249,7 @@ test("airborne perspective scale and alpha are subtle and monotonic", () => {
   }
 });
 
-test("swapping width and height preserves perspective response and bounded ground geometry", () => {
+test("swapping width and height preserves perspective and exposes only a bounded acrylic rim", () => {
   for (const elevation of [5, 30, 100]) {
     for (const [width, height] of [[100, 400], [200, 300]]) {
       const portrait = calculateVisualMetrics({
@@ -267,18 +269,18 @@ test("swapping width and height preserves perspective response and bounded groun
       assertApproximatelyEqual(portrait.token.scale, landscape.token.scale, 1e-9);
       assertApproximatelyEqual(portrait.token.alpha, landscape.token.alpha, 1e-9);
 
-      // The fixed acrylic base remains inside the Token footprint. The cast
-      // shadow may extend outside it to preserve an obvious height offset.
+      // The concentric plate intentionally extends 3-7 px past the artwork so
+      // its refractive rim survives beneath a circular Token frame.
       for (const [metrics, footprintWidth, footprintHeight] of [
         [portrait, width, height],
         [landscape, height, width]
       ]) {
-        assert.ok(metrics.base.x - metrics.base.radiusX >= 0);
-        assert.ok(metrics.base.x + metrics.base.radiusX <= footprintWidth);
-        assert.ok(metrics.base.y - metrics.base.radiusY >= 0);
-        assert.ok(metrics.base.y + metrics.base.radiusY <= footprintHeight);
-        assert.ok(metrics.shadow.radiusX <= 62);
-        assert.ok(metrics.shadow.radiusY <= 24);
+        const overshootX = metrics.base.radiusX - (footprintWidth / 2);
+        const overshootY = metrics.base.radiusY - (footprintHeight / 2);
+        assert.ok(overshootX >= 3 && overshootX <= 7);
+        assert.ok(overshootY >= 3 && overshootY <= 7);
+        assert.ok(metrics.shadow.radiusX <= Math.min(footprintWidth / 2, 400));
+        assert.ok(metrics.shadow.radiusY <= Math.min(footprintHeight / 2, 400));
         assert.ok(Math.hypot(
           metrics.shadow.x - metrics.base.x,
           metrics.shadow.y - metrics.base.y
@@ -295,7 +297,7 @@ test("shadow becomes smaller and fainter with elevation", () => {
   assert.ok(high.shadow.alpha < low.shadow.alpha);
 });
 
-test("keeps the height-cast and contact shadows prominent at tactical elevation", () => {
+test("keeps a prominent disc cast and restrained concentric plate contact at tactical elevation", () => {
   const metrics = calculateVisualMetrics({
     ...base,
     elevation: 60,
@@ -315,12 +317,12 @@ test("keeps the height-cast and contact shadows prominent at tactical elevation"
   );
   assert.deepEqual(
     [metrics.shadow.shaftEndX, metrics.shadow.shaftEndY],
-    [metrics.shadow.x, metrics.shadow.y]
+    [metrics.base.x, metrics.base.y]
   );
-  assert.ok(metrics.shadow.shaftWidth >= 2.5);
-  assert.ok(metrics.shadow.shaftAlpha > 0.4, "acrylic shaft shadow should remain strongly visible");
-  assert.ok(metrics.shadow.contactAlpha >= 0.3, "base contact shadow should remain grounded");
-  assert.ok(metrics.shadow.contactCoreAlpha >= 0.38, "contact core should remain distinct");
+  assert.equal(metrics.shadow.shaftWidth, 0);
+  assert.equal(metrics.shadow.shaftAlpha, 0);
+  assert.ok(metrics.shadow.contactAlpha >= 0.1, "plate contact halo should remain grounded");
+  assert.ok(metrics.shadow.contactCoreAlpha >= 0.07, "contact core should remain distinct");
 });
 
 test("cast shadow drifts outward while shrinking and fading after takeoff", () => {
@@ -341,14 +343,9 @@ test("cast shadow drifts outward while shrinking and fading after takeoff", () =
   }
 });
 
-test("stand shadow connects the fixed plate to the height-cast shadow", () => {
+test("top-down rod emits no impossible side-view shaft shadow", () => {
   const samples = [5, 30, 100]
     .map(elevation => calculateVisualMetrics({ ...base, elevation }));
-  const lengths = samples.map(metrics => Math.hypot(
-    metrics.shadow.shaftEndX - metrics.shadow.shaftStartX,
-    metrics.shadow.shaftEndY - metrics.shadow.shaftStartY
-  ));
-
   for (const metrics of samples) {
     assert.deepEqual(
       [metrics.shadow.shaftStartX, metrics.shadow.shaftStartY],
@@ -356,15 +353,13 @@ test("stand shadow connects the fixed plate to the height-cast shadow", () => {
     );
     assert.deepEqual(
       [metrics.shadow.shaftEndX, metrics.shadow.shaftEndY],
-      [metrics.shadow.x, metrics.shadow.y]
+      [metrics.base.x, metrics.base.y]
     );
-    assert.ok(metrics.shadow.shaftAlpha > 0);
-    assert.ok(metrics.shadow.shaftWidth > 0);
-    assert.ok(metrics.shadow.shaftEndX > metrics.shadow.shaftStartX);
-    assert.ok(metrics.shadow.shaftEndY < metrics.shadow.shaftStartY);
+    assert.equal(metrics.shadow.shaftAlpha, 0);
+    assert.equal(metrics.shadow.shaftWidth, 0);
+    assert.ok(metrics.shadow.x > metrics.base.x);
+    assert.ok(metrics.shadow.y < metrics.base.y);
   }
-  assert.ok(lengths[0] < lengths[1]);
-  assert.ok(lengths[1] < lengths[2]);
 });
 
 test("contact shadow geometry and opacity remain fixed after the first five feet", () => {
@@ -402,12 +397,12 @@ test("zero stand opacity also removes the stand lift glow", () => {
   assert.equal(metrics.liftGlow.alpha, 0);
 });
 
-test("ground projection ends at the fixed acrylic base and fades with height", () => {
+test("ground projection is concentric with the fixed acrylic plate and fades with height", () => {
   const low = calculateVisualMetrics({ ...base, elevation: 10 });
   const high = calculateVisualMetrics({ ...base, elevation: 120 });
   assert.deepEqual(
     [low.projection.startX, low.projection.startY],
-    [low.stand.topX, low.stand.topY]
+    [low.base.x, low.base.y]
   );
   assert.deepEqual(
     [high.projection.endX, high.projection.endY],
@@ -416,7 +411,7 @@ test("ground projection ends at the fixed acrylic base and fades with height", (
   assert.ok(high.projection.alpha < low.projection.alpha);
 });
 
-test("keeps the base and contact shadow inside the footprint while bounding the cast shadow", () => {
+test("bounds the exposed plate rim, concentric contact, and displaced cast shadow", () => {
   const metrics = calculateVisualMetrics({
     ...base,
     elevation: 1_000_000,
@@ -424,21 +419,18 @@ test("keeps the base and contact shadow inside the footprint while bounding the 
     groundX: 8,
     groundY: 94
   });
-  assert.ok(metrics.base.x - metrics.base.radiusX >= 0);
-  assert.ok(metrics.base.x + metrics.base.radiusX <= 100);
-  assert.ok(metrics.base.y - metrics.base.radiusY >= 0);
-  assert.ok(metrics.base.y + metrics.base.radiusY <= 100);
-  assert.ok(metrics.base.y + metrics.base.thickness + metrics.base.radiusY <= 100);
+  assert.ok(metrics.base.radiusX >= 53 && metrics.base.radiusX <= 57);
+  assert.ok(metrics.base.radiusY >= 53 && metrics.base.radiusY <= 57);
   assert.ok(Math.hypot(
     metrics.shadow.x - metrics.base.x,
     metrics.shadow.y - metrics.base.y
   ) <= 90 + 1e-9);
-  assert.ok(metrics.shadow.radiusX <= 62);
-  assert.ok(metrics.shadow.radiusY <= 24);
-  assert.ok(metrics.shadow.contactX - (metrics.shadow.contactRadiusX * 1.12) >= 0);
-  assert.ok(metrics.shadow.contactX + (metrics.shadow.contactRadiusX * 1.12) <= 100);
-  assert.ok(metrics.shadow.contactY - (metrics.shadow.contactRadiusY * 1.16) >= 0);
-  assert.ok(metrics.shadow.contactY + (metrics.shadow.contactRadiusY * 1.16) <= 100);
+  assert.ok(metrics.shadow.radiusX <= 50);
+  assert.ok(metrics.shadow.radiusY <= 50);
+  assert.equal(metrics.shadow.contactX, metrics.base.x);
+  assert.ok(metrics.shadow.contactY >= metrics.base.y);
+  assert.ok(metrics.shadow.contactRadiusX < metrics.base.radiusX);
+  assert.ok(metrics.shadow.contactRadiusY < metrics.base.radiusY);
   assert.ok(metrics.shadow.contactAlpha > 0);
 });
 
@@ -568,11 +560,11 @@ test("ambient offset starts at rest and respects amplitude, period, and reduced 
   }
 });
 
-test("airborne bob amplitude is slightly stronger while remaining restrained", () => {
+test("airborne bob remains visible but smaller than the bounded top-view parallax", () => {
   const low = calculateVisualMetrics({ ...base, elevation: 5 });
   const high = calculateVisualMetrics({ ...base, elevation: 100 });
 
-  assert.ok(low.token.bobAmplitude >= 1, "a one-grid flight should have a readable float");
+  assert.ok(low.token.bobAmplitude >= 0.6, "a one-grid flight should have a readable float");
   assert.ok(high.token.bobAmplitude > low.token.bobAmplitude);
-  assert.ok(high.token.bobAmplitude <= 1.75, "ambient motion must remain subtle");
+  assert.ok(high.token.bobAmplitude <= 1.25, "ambient motion must remain subtle");
 });

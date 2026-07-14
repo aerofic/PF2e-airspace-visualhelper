@@ -43,6 +43,7 @@ export class FlyingTokenVisual {
     this.reducedMotion = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
     this.metrics = null;
     this.lastProjectionEmphasized = null;
+    this.lastStandEmphasized = null;
     this.liftEnabled = false;
     this.zScatterCompatibility = new ZScatterCompatibility(token);
 
@@ -385,7 +386,7 @@ export class FlyingTokenVisual {
     if (!metrics) return;
     this.shadow.render(metrics, this.settings.enableShadow);
     this.#renderProjection();
-    this.stand.render(metrics, this.settings.enableStand);
+    this.#renderStand();
   }
 
   #renderProjection() {
@@ -403,6 +404,15 @@ export class FlyingTokenVisual {
   #refreshProjectionEmphasis() {
     const emphasized = !!(this.token.controlled || this.token.hover);
     if (emphasized !== this.lastProjectionEmphasized) this.#renderProjection();
+    if (emphasized !== this.lastStandEmphasized) this.#renderStand();
+  }
+
+  #renderStand() {
+    const metrics = this.metrics;
+    if (!metrics) return;
+    const emphasized = !!(this.token.controlled || this.token.hover);
+    this.stand.render(metrics, this.settings.enableStand, { emphasized });
+    this.lastStandEmphasized = emphasized;
   }
 
   #resetAmbientMotion({ apply = false } = {}) {

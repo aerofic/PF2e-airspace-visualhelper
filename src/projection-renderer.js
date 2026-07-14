@@ -3,7 +3,7 @@ const PROJECTION_MARKER_COLOR = 0xb9d8dc;
 const FOOTPRINT_COLOR = 0x9cc7cc;
 const MAX_DASH_SEGMENTS = 512;
 
-/** Draws a ground marker and a manually segmented PIXI projection line. */
+/** Draw a top-down landing ring at Foundry's real Token footprint. */
 export class ProjectionRenderer {
   constructor(graphics) {
     this.graphics = graphics;
@@ -12,7 +12,7 @@ export class ProjectionRenderer {
   }
 
   render(metrics, enabled, {
-    standEnabled = false,
+    standEnabled: _standEnabled = false,
     emphasized = false,
     footprintShape = null
   } = {}) {
@@ -24,8 +24,6 @@ export class ProjectionRenderer {
     if (!graphics.visible) return;
 
     const {
-      startX,
-      startY,
       endX,
       endY,
       markerRadius,
@@ -40,38 +38,71 @@ export class ProjectionRenderer {
     } = metrics.projection;
 
     // This is a visual cue only. Foundry's real border, hitArea and snapping
-    // remain on the Token placeable at the same ground footprint.
+    // remain on the Token placeable at the same concentric footprint.
     drawFootprintReticle(graphics, {
       footprint,
       footprintShape,
       dashLength,
       gapLength,
-      alpha: Math.min(0.42, reticleAlpha * (emphasized ? 3.8 : 1)),
+      alpha: Math.min(0.5, reticleAlpha * (emphasized ? 3.8 : 0.5)),
       width: emphasized ? Math.max(1.5, lineWidth * 0.9) : Math.max(1, lineWidth * 0.58)
     });
 
-    // When the acrylic stand is present it already communicates the vertical
-    // axis. Keep the projection guide restrained so the two do not combine
-    // into the old bright cyan "laser rod".
-    const guideAlpha = alpha * (standEnabled ? 0.18 : 0.72);
-    drawDashedLine(graphics, {
-      startX,
-      startY,
-      endX,
-      endY,
-      dashLength,
-      gapLength,
-      width: lineWidth,
-      color: PROJECTION_LINE_COLOR,
-      alpha: guideAlpha
+    // Four broken arcs remain visible just outside circular Token art. They
+    // replace the side-view vertical guide and intensify only on interaction.
+    drawSegmentedEllipse(graphics, {
+      x: endX,
+      y: endY,
+      radiusX: markerRadiusX,
+      radiusY: markerRadiusY,
+      width: emphasized ? Math.max(1.6, lineWidth) : Math.max(1, lineWidth * 0.68),
+      color: PROJECTION_MARKER_COLOR,
+      alpha: Math.min(0.62, alpha * (emphasized ? 1.25 : 0.42))
     });
 
-    const markerAlpha = alpha * (standEnabled ? 0.44 : 0.82);
-    graphics.lineStyle(Math.max(1.15, lineWidth * 0.82), PROJECTION_MARKER_COLOR, markerAlpha)
-      .drawEllipse(endX, endY, markerRadiusX, markerRadiusY);
-    graphics.beginFill(PROJECTION_MARKER_COLOR, markerAlpha * 0.09)
-      .drawEllipse(endX, endY, markerRadiusX * 0.78, markerRadiusY * 0.72)
-      .endFill();
+    if (emphasized) {
+      drawSegmentedEllipse(graphics, {
+        x: endX,
+        y: endY,
+        radiusX: markerRadiusX * 0.9,
+        radiusY: markerRadiusY * 0.9,
+        width: Math.max(0.9, lineWidth * 0.56),
+        color: PROJECTION_LINE_COLOR,
+        alpha: Math.min(0.4, alpha * 0.72),
+        phase: Math.PI / 4
+      });
+    }
+  }
+}
+
+/** Draw four bounded ellipse arcs without requiring PIXI arc support. */
+export function drawSegmentedEllipse(graphics, {
+  x,
+  y,
+  radiusX,
+  radiusY,
+  width,
+  color,
+  alpha,
+  phase = 0
+}) {
+  const values = [x, y, radiusX, radiusY, width, alpha, phase].map(Number);
+  if (!values.every(Number.isFinite)) return;
+  if (!(radiusX > 0) || !(radiusY > 0) || !(width > 0) || !(alpha > 0)) return;
+
+  const arcLength = Math.PI * 0.24;
+  const samples = 8;
+  graphics.lineStyle(width, color, alpha);
+  for (let quadrant = 0; quadrant < 4; quadrant += 1) {
+    const center = phase + (quadrant * Math.PI / 2);
+    const start = center - (arcLength / 2);
+    for (let index = 0; index <= samples; index += 1) {
+      const angle = start + ((arcLength * index) / samples);
+      const px = x + (Math.cos(angle) * radiusX);
+      const py = y + (Math.sin(angle) * radiusY);
+      if (index === 0) graphics.moveTo(px, py);
+      else graphics.lineTo(px, py);
+    }
   }
 }
 

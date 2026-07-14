@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { drawDashedLine, drawVerticalDashedLine } from "../src/projection-renderer.js";
+import {
+  drawDashedLine,
+  drawSegmentedEllipse,
+  drawVerticalDashedLine
+} from "../src/projection-renderer.js";
 
 class FakeGraphics {
   commands = [];
@@ -40,6 +44,28 @@ test("does not draw invalid or zero-length projection lines", () => {
     alpha: 0.4
   });
   assert.equal(graphics.commands.length, 0);
+});
+
+test("draws four bounded top-down landing-ring arcs", () => {
+  const graphics = new FakeGraphics();
+  drawSegmentedEllipse(graphics, {
+    x: 50,
+    y: 50,
+    radiusX: 55,
+    radiusY: 55,
+    width: 2,
+    color: 0xffffff,
+    alpha: 0.4
+  });
+  const moves = graphics.commands.filter(command => command[0] === "moveTo");
+  const lines = graphics.commands.filter(command => command[0] === "lineTo");
+  assert.equal(moves.length, 4);
+  assert.equal(lines.length, 32);
+  for (const [, x, y] of [...moves, ...lines]) {
+    assert.ok(Number.isFinite(x) && Number.isFinite(y));
+    assert.ok(x >= -5 && x <= 105);
+    assert.ok(y >= -5 && y <= 105);
+  }
 });
 
 test("draws bounded dashed segments along an inclined acrylic stand", () => {
