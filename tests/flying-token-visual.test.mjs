@@ -254,7 +254,8 @@ test("keeps the ground base snapped while only the rendered mesh moves", () => {
     [visual.container.x + visual.metrics.base.x, visual.container.y + visual.metrics.base.y],
     [token.center.x, token.center.y]
   );
-  assert.ok(offset.x < 0 && offset.y < 0);
+  assert.equal(offset.x, 0);
+  assert.ok(offset.y < 0);
   assertClose(token.tooltip.x, 50 + offset.x);
   assertClose(token.tooltip.y, -4 + offset.y);
   assertClose(token.levelIndicator.x, 50 + offset.x);

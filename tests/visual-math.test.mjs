@@ -122,15 +122,15 @@ test("lift, stand length, and bounded shadow drift grow with elevation", () => {
   assert.ok(medium.shadow.y < high.shadow.y);
 });
 
-test("keeps the acrylic base at the Token footprint while leaning the art up-left", () => {
+test("keeps the acrylic base at the Token footprint while raising the art vertically", () => {
   for (const elevation of [10, 60, 120]) {
     const metrics = calculateVisualMetrics({ ...base, elevation });
     assert.deepEqual([metrics.base.x, metrics.base.y], [50, 50]);
     assert.deepEqual([metrics.stand.baseX, metrics.stand.baseY], [50, 50]);
     assert.deepEqual([metrics.projection.endX, metrics.projection.endY], [50, 50]);
-    assert.ok(metrics.token.offsetX < 0);
+    assert.equal(metrics.token.offsetX, 0);
     assert.ok(metrics.token.offsetY < 0);
-    assert.ok(metrics.stand.topX < metrics.stand.baseX);
+    assert.equal(metrics.stand.topX, metrics.stand.baseX);
     assert.ok(metrics.stand.topY < metrics.stand.baseY);
     assert.deepEqual(
       [metrics.stand.topX, metrics.stand.topY],
@@ -157,7 +157,7 @@ test("passes an irregular local Token center through every fixed ground anchor",
   );
 });
 
-test("uses a true twelve-degree stand axis without changing rules coordinates", () => {
+test("uses a strictly vertical stand axis without changing rules coordinates", () => {
   const pose = calculateFlightPose({
     elevation: 500,
     gridSize: 100,
@@ -168,13 +168,13 @@ test("uses a true twelve-degree stand axis without changing rules coordinates", 
   assert.deepEqual(pose.ground, { x: 50, y: 50 });
   assert.ok(pose.lift > 0);
   assert.deepEqual(pose.standTop, pose.tokenCenter);
-  const axisX = pose.ground.x - pose.standTop.x;
-  const axisY = pose.ground.y - pose.standTop.y;
-  const angleFromVertical = Math.atan2(Math.abs(axisX), Math.abs(axisY));
-  assert.ok(Math.abs(angleFromVertical - (12 * (Math.PI / 180))) < 1e-12);
+  assert.equal(pose.lean, 0);
+  assert.equal(pose.tokenOffset.x, 0);
+  assert.equal(pose.standTop.x, pose.ground.x);
+  assert.ok(pose.standTop.y < pose.ground.y);
 });
 
-test("caps stand lean only for pathological custom Token dimensions", () => {
+test("keeps pathological custom Token dimensions vertical and finite", () => {
   const pose = calculateFlightPose({
     elevation: 500,
     gridSize: 100,
@@ -182,8 +182,10 @@ test("caps stand lean only for pathological custom Token dimensions", () => {
     tokenWidth: 100,
     tokenHeight: 1_000_000
   });
-  assert.equal(pose.lean, 150);
-  assert.ok(Math.atan2(pose.lean, pose.lift) < (12 * (Math.PI / 180)));
+  assert.equal(pose.lean, 0);
+  assert.equal(pose.tokenOffset.x, 0);
+  assert.equal(pose.standTop.x, pose.ground.x);
+  assert.ok(Number.isFinite(pose.lift));
 });
 
 test("raises elongated 1x4 and 2x3 Token art fully above its fixed base", () => {

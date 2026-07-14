@@ -15,13 +15,11 @@ export function normalizeHudElevation(value) {
   return Number.isFinite(elevation) ? elevation : 0;
 }
 
-const STAND_LEAN_RADIANS = 12 * (Math.PI / 180);
 // PIXI cannot usefully render near-Number.MAX coordinates. Bounding source
 // dimensions also prevents otherwise finite inputs from overflowing later
 // additions and distance calculations.
 const MAX_CANVAS_DIMENSION = 1_000_000;
 const MAX_HEIGHT_STEPS = 1_000_000;
-const MAX_STAND_LEAN_GRIDS = 1.5;
 const CONTACT_OUTER_SCALE_X = 1.12;
 const CONTACT_OUTER_SCALE_Y = 1.16;
 
@@ -108,11 +106,11 @@ export function calculateFlightPose({
   // logarithmically compressed clearance keeps extreme heights readable.
   const lift = (halfVisual * heightCurve.takeoff)
     + (safeGridSize * heightCurve.clearanceGrids);
-  const lean = Math.min(
-    lift * Math.tan(STAND_LEAN_RADIANS),
-    safeGridSize * MAX_STAND_LEAN_GRIDS
-  );
-  const tokenOffset = { x: -lean, y: -lift };
+  // Keep the physical stand axis strictly vertical. The offset cast shadow,
+  // contact shadow, perspective treatment, and ambient float supply depth
+  // without making the model look pulled sideways by a kite string.
+  const lean = 0;
+  const tokenOffset = { x: 0, y: -lift };
   const tokenCenter = {
     x: ground.x + tokenOffset.x,
     y: ground.y + tokenOffset.y

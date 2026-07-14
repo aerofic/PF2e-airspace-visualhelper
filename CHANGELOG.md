@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.14 — Vertical Stand Axis
+
+- Replaced the twelve-degree stand lean with a strictly vertical acrylic axis from the fixed ground-plate center to the lifted Token center.
+- Removed all horizontal airborne-art displacement, eliminating the sideways kite-string silhouette while keeping the ground footprint and movement target unambiguous.
+- Kept the strong down-right height-cast shadow, dense contact shadow, perspective scale, and ambient float as the primary depth cues.
+- Preserved the denser 0.4.13 acrylic plate and the compact sleeve-only top connector; no clamp geometry was restored.
+- Kept `TokenDocument` position, movement, snapping, hit areas, vision, targeting, and PF2e rules unchanged.
+- Added regression coverage for exact vertical alignment across ordinary, irregular-center, multi-grid, and pathological Token dimensions.
+
 ## 0.4.13 — Denser Base Without Clamp
 
 - Restored only the denser acrylic plate requested from 0.4.11: stronger top material, underside depth, and refractive outer edge.
