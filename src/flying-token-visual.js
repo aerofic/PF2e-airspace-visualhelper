@@ -1,6 +1,7 @@
 import { FlyingStand } from "./flying-stand.js";
 import { ProjectionRenderer } from "./projection-renderer.js";
 import { ShadowRenderer } from "./shadow-renderer.js";
+import { TokenLiftRenderer } from "./token-lift-renderer.js";
 import {
   calculateAnimationDuration,
   calculateVisualMetrics,
@@ -30,6 +31,7 @@ export class FlyingTokenVisual {
     this.followingCoreAnimation = false;
     this.labelAlpha = 1;
     this.lastAnimatedRenderAt = 0;
+    this.metrics = null;
 
     this.container = new PIXI.Container();
     this.container.name = "pf2e-flying-visual-helper";
@@ -51,6 +53,7 @@ export class FlyingTokenVisual {
     this.shadow = new ShadowRenderer(this.shadowGraphics);
     this.projection = new ProjectionRenderer(this.projectionGraphics);
     this.stand = new FlyingStand(this.standGraphics);
+    this.tokenLift = new TokenLiftRenderer(token);
 
     parent.addChild(this.container);
     this.#syncPosition();
@@ -184,38 +187,59 @@ export class FlyingTokenVisual {
 
   /** Handle only render flags which affect geometry or the native tooltip. */
   onRefresh(flags = {}) {
-    if (flags.refreshPosition || flags.refreshTransform || flags.redraw) this.#syncPosition();
+    const positionRefreshed = flags.refreshPosition || flags.refreshTransform || flags.redraw;
+    const uiBaseRefreshed = flags.refreshSize || flags.refreshTransform || flags.redraw;
+    const uiRetainsOwnedOffset = flags.refreshTooltip && !uiBaseRefreshed;
+    if (positionRefreshed) this.#syncPosition();
     if (flags.refreshSize || flags.refreshShape || flags.refreshState || flags.refreshVisibility || flags.redraw) {
-      this.render();
-    } else if (flags.refreshTooltip || flags.refreshElevation) {
-      this.#applyNativeTooltipState();
+      this.render({
+        meshBaseRefreshed: positionRefreshed,
+        uiBaseRefreshed,
+        uiRetainsOwnedOffset
+      });
+      return;
     }
+    // Horizontal movement does not rebuild any Graphics. Foundry has just put
+    // the Primary mesh back at token.center, so reapply the cached visual pose.
+    this.#applyTokenLift({
+      meshBaseRefreshed: positionRefreshed,
+      uiBaseRefreshed,
+      uiRetainsOwnedOffset
+    });
+    if (flags.refreshTooltip || flags.refreshElevation) this.#applyNativeTooltipState();
   }
 
-  render() {
+  render({
+    meshBaseRefreshed = false,
+    uiBaseRefreshed = false,
+    uiRetainsOwnedOffset = false
+  } = {}) {
     if (this.container.destroyed || this.token.destroyed) return;
     this.#syncPosition();
     const size = this.token.document.getSize();
+    const ground = this.#getLocalGround(size);
     const metrics = calculateVisualMetrics({
       elevation: this.displayElevation,
       gridSize: canvas.grid?.size ?? canvas.dimensions?.size ?? 100,
       gridDistance: canvas.grid?.distance ?? canvas.dimensions?.distance ?? 5,
       tokenWidth: size.width,
       tokenHeight: size.height,
+      groundX: ground.x,
+      groundY: ground.y,
       standOpacity: this.settings.standOpacity,
       shadowOpacity: this.settings.shadowOpacity,
       projectionOpacity: this.settings.projectionOpacity,
       shadowDistanceMultiplier: this.settings.shadowDistanceMultiplier
     });
+    this.metrics = metrics;
 
     const visibleToUser = (this.token.visible !== false) && !this.token.document.isSecret;
-    const geometryEnabled = this.settings.enableStand
-      || this.settings.enableShadow
-      || this.settings.enableGroundProjection;
+    const geometryEnabled = this.#hasVisibleGeometry(metrics);
     this.container.visible = metrics.flying && visibleToUser && geometryEnabled;
     this.shadow.render(metrics, this.settings.enableShadow);
     this.projection.render(metrics, this.settings.enableGroundProjection);
     this.stand.render(metrics, this.settings.enableStand);
+    this.#applyTokenLift({ meshBaseRefreshed, uiBaseRefreshed, uiRetainsOwnedOffset });
     this.#applyNativeTooltipState();
     this.lastAnimatedRenderAt = performance.now();
   }
@@ -223,6 +247,7 @@ export class FlyingTokenVisual {
   destroy() {
     this.animation = null;
     this.coreAnimation = null;
+    this.tokenLift.restore();
     this.#restoreNativeTooltip();
     if (!this.container.destroyed) {
       this.container.removeFromParent();
@@ -292,6 +317,30 @@ export class FlyingTokenVisual {
     this.render();
   }
 
+  #applyTokenLift({
+    meshBaseRefreshed = false,
+    uiBaseRefreshed = false,
+    uiRetainsOwnedOffset = false
+  } = {}) {
+    const metrics = this.metrics;
+    if (!metrics) return;
+    const visibleToUser = (this.token.visible !== false) && !this.token.document.isSecret;
+    const geometryEnabled = this.#hasVisibleGeometry(metrics);
+    this.tokenLift.apply(metrics.token, {
+      enabled: metrics.flying && visibleToUser && geometryEnabled,
+      meshBaseRefreshed,
+      uiBaseRefreshed,
+      uiRetainsOwnedOffset
+    });
+  }
+
+  #hasVisibleGeometry(metrics) {
+    return (this.settings.enableStand && (metrics.stand.opacity > VISUAL_EPSILON))
+      || (this.settings.enableShadow
+        && ((metrics.shadow.alpha > VISUAL_EPSILON) || (metrics.shadow.contactAlpha > VISUAL_EPSILON)))
+      || (this.settings.enableGroundProjection && (metrics.projection.alpha > VISUAL_EPSILON));
+  }
+
   #syncPosition() {
     if (this.container.destroyed) return;
     const x = Number(this.token.position?.x ?? this.token.document?.x) || 0;
@@ -301,6 +350,17 @@ export class FlyingTokenVisual {
       this.container.x = x;
       this.container.y = y;
     }
+  }
+
+  #getLocalGround(size) {
+    const centerX = Number(this.token.center?.x);
+    const centerY = Number(this.token.center?.y);
+    const originX = Number(this.container.position?.x ?? this.container.x);
+    const originY = Number(this.container.position?.y ?? this.container.y);
+    return {
+      x: Number.isFinite(centerX) && Number.isFinite(originX) ? centerX - originX : size.width / 2,
+      y: Number.isFinite(centerY) && Number.isFinite(originY) ? centerY - originY : size.height / 2
+    };
   }
 }
 

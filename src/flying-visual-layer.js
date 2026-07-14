@@ -5,9 +5,10 @@ import { normalizeFlyingElevation } from "./visual-math.js";
 
 /**
  * Canvas lifecycle manager for all flight visuals in the viewed Scene.
- * Visuals live in PrimaryCanvasGroup just below normal Token meshes. Foundry's
- * refreshPosition hook synchronizes x/y and previews without rebuilding their
- * height-dependent geometry.
+ * The acrylic base remains anchored to the TokenDocument footprint. A
+ * reversible Primary mesh offset lifts only the Token art, while Foundry's
+ * refreshPosition hook keeps movement previews snapped to the ground base
+ * without rebuilding height-dependent geometry.
  */
 export class FlyingVisualLayer {
   #canvas = null;
@@ -119,8 +120,8 @@ export class FlyingVisualLayer {
     } else if (["width", "height", "shape", "texture"].some(key => key in changes)) {
       visual.render();
     }
-    // x/y movement only updates the Primary container transform in refreshToken;
-    // geometry is not recalculated for horizontal movement.
+    // x/y movement only updates the ground container and reapplies the cached
+    // mesh offset in refreshToken; geometry is not recalculated.
   }
 
   onMoveToken(document, movement, operation, _user) {

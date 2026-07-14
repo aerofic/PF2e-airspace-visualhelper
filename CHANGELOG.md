@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0 — Ground-Anchored Flight Stand
+
+- Reversed the flight illusion: the acrylic base now stays at the TokenDocument footprint while the Token mesh rises up-left.
+- Added reversible PrimarySpriteMesh and native visual-UI offsets which do not change Token coordinates, hit areas, snapping, movement, vision, or rules data; Foundry still owns the elevation tooltip text and units.
+- Kept drag previews and horizontal movement aligned by the ground base and reapplied the cached visual pose after core refreshes.
+- Replaced the vertical shaft with a roughly 12-degree inclined acrylic stand whose top connects to the raised Token center, including elongated and non-rectangular Token footprints.
+- Strengthened the stand, height shadow, contact shadow, and ground projection while keeping the complete soft-shadow bounds inside the original footprint.
+- Added mesh/UI restoration and exact last-write protection for disable, redraw, elevation zero, Canvas teardown, and later module position writes.
+
 ## 0.2.1 — Translucent Top HUD
 
 - Changed the Airspace HUD default layout to a wide, horizontally centered top strip.
