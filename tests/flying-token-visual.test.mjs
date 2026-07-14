@@ -394,7 +394,11 @@ test("renders layered acrylic material, restrained highlights, and dual shadow g
   assert.ok(specularLines.length >= 5);
   assert.ok(Math.max(...specularLines.map(command => command[1])) <= 1.5);
   assert.equal(visual.standSpecularGraphics.blendMode, "screen");
-  assert.equal(shadowFills.length, 5);
+  assert.equal(shadowFills.length, 7);
+  assert.equal(
+    visual.shadowGraphics.commands.filter(command => command[0] === "drawPolygon").length,
+    2
+  );
   assert.ok(Math.max(...shadowFills.map(command => command[2])) > 0.1);
   assert.equal(
     [...visual.standGraphics.commands, ...visual.standSpecularGraphics.commands]

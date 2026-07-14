@@ -56,6 +56,12 @@ const metrics = {
     radiusX: 23,
     radiusY: 7,
     alpha: 0.3,
+    shaftStartX: 50,
+    shaftStartY: 50,
+    shaftEndX: 59,
+    shaftEndY: 54,
+    shaftWidth: 4,
+    shaftAlpha: 0.5,
     contactX: 50,
     contactY: 52,
     contactRadiusX: 22,
@@ -114,7 +120,7 @@ test("layers a restrained acrylic body, plate, pin, connector, and SCREEN highli
   assert.deepEqual(specular.commands, []);
 });
 
-test("uses three height layers and two contact layers without filters", () => {
+test("uses two shaft, three height, and two contact shadow layers without filters", () => {
   const graphics = new FakeGraphics();
   const renderer = new ShadowRenderer(graphics);
 
@@ -127,11 +133,15 @@ test("uses three height layers and two contact layers without filters", () => {
   assert.equal(graphics.visible, true);
   assert.equal(
     graphics.commands.filter(command => command[0] === "beginFill").length,
-    5
+    7
   );
+  assert.equal(graphics.commands.filter(command => command[0] === "drawPolygon").length, 2);
   const fills = graphics.commands.filter(command => command[0] === "beginFill");
-  assert.ok(fills.every(command => command[2] > 0 && command[2] <= 0.3));
-  const castOpacity = fills.slice(0, 3)
+  assert.ok(fills.every(command => command[2] > 0 && command[2] <= 0.36));
+  const shaftOpacity = fills.slice(0, 2)
+    .reduce((combined, command) => 1 - ((1 - combined) * (1 - command[2])), 0);
+  assert.ok(shaftOpacity > 0.45, "shaft shadow should read as a strong physical cast shadow");
+  const castOpacity = fills.slice(2, 5)
     .reduce((combined, command) => 1 - ((1 - combined) * (1 - command[2])), 0);
   assert.ok(castOpacity > 0.35, "layered cast shadow should remain clearly readable");
 

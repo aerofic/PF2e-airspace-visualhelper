@@ -214,6 +214,8 @@ export function calculateVisualMetrics({
   // to one grid square erased most of the visible offset at useful heights.
   const shadowX = pose.ground.x + (desiredShadowDistance * 0.88);
   const shadowY = pose.ground.y + (desiredShadowDistance * 0.47);
+  const shaftShadowWidth = clamp(lineWidth * (0.72 + (signal * 0.16)), 2.5, 6);
+  const shaftShadowAlpha = normalizedShadowOpacity * takeoff * (0.72 + (signal * 0.12));
 
   // Contact shadow belongs to the physical ground plate and does not drift or
   // fade with height once the Token has completed its first 5 ft of takeoff.
@@ -296,6 +298,12 @@ export function calculateVisualMetrics({
       radiusX: shadowRadiusX,
       radiusY: shadowRadiusY,
       alpha: normalizedShadowOpacity * shadowFalloff * takeoff,
+      shaftStartX: pose.ground.x,
+      shaftStartY: pose.ground.y,
+      shaftEndX: shadowX,
+      shaftEndY: shadowY,
+      shaftWidth: shaftShadowWidth,
+      shaftAlpha: shaftShadowAlpha,
       contactX,
       contactY,
       contactRadiusX,
@@ -426,6 +434,12 @@ function emptyMetrics({ pose, width, height }) {
       radiusX: 0,
       radiusY: 0,
       alpha: 0,
+      shaftStartX: ground.x,
+      shaftStartY: ground.y,
+      shaftEndX: ground.x,
+      shaftEndY: ground.y,
+      shaftWidth: 0,
+      shaftAlpha: 0,
       contactX: ground.x,
       contactY: ground.y,
       contactRadiusX: 0,

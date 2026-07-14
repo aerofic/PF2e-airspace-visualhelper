@@ -307,6 +307,16 @@ test("keeps the height-cast and contact shadows prominent at tactical elevation"
   assert.ok(distance > 35, "60 ft shadow should visibly leave the ground marker");
   assert.ok(metrics.shadow.alpha > 0.4, "cast shadow should survive height falloff");
   assert.ok(metrics.shadow.radiusX > 28, "cast shadow should retain readable area");
+  assert.deepEqual(
+    [metrics.shadow.shaftStartX, metrics.shadow.shaftStartY],
+    [metrics.base.x, metrics.base.y]
+  );
+  assert.deepEqual(
+    [metrics.shadow.shaftEndX, metrics.shadow.shaftEndY],
+    [metrics.shadow.x, metrics.shadow.y]
+  );
+  assert.ok(metrics.shadow.shaftWidth >= 2.5);
+  assert.ok(metrics.shadow.shaftAlpha > 0.4, "acrylic shaft shadow should remain strongly visible");
   assert.ok(metrics.shadow.contactAlpha >= 0.3, "base contact shadow should remain grounded");
   assert.ok(metrics.shadow.contactCoreAlpha >= 0.38, "contact core should remain distinct");
 });
@@ -327,6 +337,30 @@ test("cast shadow drifts outward while shrinking and fading after takeoff", () =
   for (let index = 2; index < samples.length; index += 1) {
     assert.ok(samples[index].shadow.alpha < samples[index - 1].shadow.alpha);
   }
+});
+
+test("stand shadow connects the fixed plate to the height-cast shadow", () => {
+  const samples = [5, 30, 100]
+    .map(elevation => calculateVisualMetrics({ ...base, elevation }));
+  const lengths = samples.map(metrics => Math.hypot(
+    metrics.shadow.shaftEndX - metrics.shadow.shaftStartX,
+    metrics.shadow.shaftEndY - metrics.shadow.shaftStartY
+  ));
+
+  for (const metrics of samples) {
+    assert.deepEqual(
+      [metrics.shadow.shaftStartX, metrics.shadow.shaftStartY],
+      [metrics.base.x, metrics.base.y]
+    );
+    assert.deepEqual(
+      [metrics.shadow.shaftEndX, metrics.shadow.shaftEndY],
+      [metrics.shadow.x, metrics.shadow.y]
+    );
+    assert.ok(metrics.shadow.shaftAlpha > 0);
+    assert.ok(metrics.shadow.shaftWidth > 0);
+  }
+  assert.ok(lengths[0] < lengths[1]);
+  assert.ok(lengths[1] < lengths[2]);
 });
 
 test("contact shadow geometry and opacity remain fixed after the first five feet", () => {

@@ -16,7 +16,10 @@ export class ShadowRenderer {
     graphics.visible = Boolean(
       metrics.flying
       && enabled
-      && ((shadow.alpha > 0) || (shadow.contactAlpha > 0) || (shadow.contactCoreAlpha > 0))
+      && ((shadow.alpha > 0)
+        || (shadow.shaftAlpha > 0)
+        || (shadow.contactAlpha > 0)
+        || (shadow.contactCoreAlpha > 0))
     );
     if (!graphics.visible) return;
 
@@ -32,6 +35,11 @@ export class ShadowRenderer {
       contactRadiusY,
       contactAlpha
     } = shadow;
+
+    // The vertical acrylic shaft casts a separate ground-plane shadow along
+    // the same light vector as the airborne model. A broad penumbra plus a
+    // tapered core creates depth without a per-Token BlurFilter.
+    drawShaftShadow(graphics, shadow);
 
     // Three nested ellipses approximate a soft penumbra without allocating a
     // BlurFilter per Token. Deliberately strong MULTIPLY weights keep the cast
@@ -62,6 +70,74 @@ export class ShadowRenderer {
       finiteOr(shadow.contactCoreRadiusY, contactRadiusY * 0.62)
     ).endFill();
   }
+}
+
+function drawShaftShadow(graphics, shadow) {
+  const startX = finiteOr(shadow?.shaftStartX, shadow?.contactX);
+  const startY = finiteOr(shadow?.shaftStartY, shadow?.contactY);
+  const endX = finiteOr(shadow?.shaftEndX, shadow?.x);
+  const endY = finiteOr(shadow?.shaftEndY, shadow?.y);
+  const alpha = Math.min(1, Math.max(0, finiteOr(shadow?.shaftAlpha, 0)));
+  const width = Math.min(64, Math.max(0, finiteOr(shadow?.shaftWidth, 0)));
+  const dx = endX - startX;
+  const dy = endY - startY;
+  const length = Math.hypot(dx, dy);
+  if (!(length > 0) || !(alpha > 0) || !(width > 0)) return;
+
+  const normalX = -dy / length;
+  const normalY = dx / length;
+  drawTaperedPolygon(graphics, {
+    startX,
+    startY,
+    endX,
+    endY,
+    normalX,
+    normalY,
+    startHalfWidth: width * 0.65,
+    endHalfWidth: width * 1.1,
+    alpha: alpha * 0.38
+  });
+  drawTaperedPolygon(graphics, {
+    startX,
+    startY,
+    endX,
+    endY,
+    normalX,
+    normalY,
+    startHalfWidth: width * 0.28,
+    endHalfWidth: width * 0.5,
+    alpha: alpha * 0.72
+  });
+}
+
+function drawTaperedPolygon(graphics, data) {
+  const {
+    startX,
+    startY,
+    endX,
+    endY,
+    normalX,
+    normalY,
+    startHalfWidth,
+    endHalfWidth,
+    alpha
+  } = data;
+  const points = [
+    startX - (normalX * startHalfWidth), startY - (normalY * startHalfWidth),
+    startX + (normalX * startHalfWidth), startY + (normalY * startHalfWidth),
+    endX + (normalX * endHalfWidth), endY + (normalY * endHalfWidth),
+    endX - (normalX * endHalfWidth), endY - (normalY * endHalfWidth)
+  ];
+  graphics.beginFill(SHADOW_COLOR, alpha);
+  if (typeof graphics.drawPolygon === "function") graphics.drawPolygon(points);
+  else {
+    graphics.moveTo(points[0], points[1]);
+    for (let index = 2; index < points.length; index += 2) {
+      graphics.lineTo(points[index], points[index + 1]);
+    }
+    graphics.lineTo(points[0], points[1]);
+  }
+  graphics.endFill();
 }
 
 function finiteOr(value, fallback) {
