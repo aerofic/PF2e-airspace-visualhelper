@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.4 — Native Labels Follow Lifted Tokens
+
+- Made Foundry/PF2e native elevation tooltip and Level-indicator positions follow the exact airborne Mesh lift while retaining their original relative placement above Token artwork.
+- Synchronized label position through fallback and core elevation animation, ambient bobbing, horizontal movement, redraws, and Z Scatter layout changes.
+- Kept label text, units, font styling, alpha, and renderable state under exclusive Foundry/PF2e ownership; the removed `Enable Height Label` setting remains removed.
+- Restored reversible per-property position ownership so teardown and landing return labels to their current core/Z Scatter bases without overwriting later third-party writes.
+- Added regression coverage for lifted placement, core tooltip refreshes, Z Scatter rebasing, animation alpha preservation, ambient motion, and exact teardown restoration.
+
 ## 0.4.3 — Click-to-Open Airspace HUD
 
 - Removed every automatic HUD-open path from world readiness, Canvas readiness, Scene changes, and runtime setting changes.

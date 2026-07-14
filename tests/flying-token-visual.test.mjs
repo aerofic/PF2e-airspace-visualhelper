@@ -150,35 +150,42 @@ function makeToken(elevation) {
   return token;
 }
 
-test("never changes native elevation UI position, visibility, or alpha", () => {
+test("moves native elevation UI with the artwork without changing visibility or alpha", () => {
   const token = makeToken(60);
   token.tooltip.position.set(63, -7);
   token.tooltip.alpha = 0.43;
-  token.tooltip.renderable = false;
+  token.tooltip.renderable = true;
   token.levelIndicator.position.set(61, -29);
   const visual = new FlyingTokenVisual(token, settings);
+  const { offsetX, offsetY } = visual.metrics.token;
 
-  assert.equal(token.tooltip.renderable, false);
+  assert.equal(token.tooltip.renderable, true);
   assert.equal(token.tooltip.alpha, 0.43);
-  assert.deepEqual([token.tooltip.x, token.tooltip.y], [63, -7]);
-  assert.deepEqual([token.levelIndicator.x, token.levelIndicator.y], [61, -29]);
+  assertClose(token.tooltip.x, 63 + offsetX);
+  assertClose(token.tooltip.y, -7 + offsetY);
+  assertClose(token.levelIndicator.x, 61 + offsetX);
+  assertClose(token.levelIndicator.y, -29 + offsetY);
   assert.equal(visual.container.children.length, 4);
   assert.ok(visual.container.children.every(child => child instanceof FakeGraphics));
 
   visual.updateSettings({ ...settings });
-  assert.equal(token.tooltip.renderable, false);
+  assert.equal(token.tooltip.renderable, true);
   assert.equal(token.tooltip.alpha, 0.43);
-  assert.deepEqual([token.tooltip.x, token.tooltip.y], [63, -7]);
-  assert.deepEqual([token.levelIndicator.x, token.levelIndicator.y], [61, -29]);
+  assertClose(token.tooltip.x, 63 + offsetX);
+  assertClose(token.tooltip.y, -7 + offsetY);
+  assertClose(token.levelIndicator.x, 61 + offsetX);
+  assertClose(token.levelIndicator.y, -29 + offsetY);
 
   visual.destroy();
-  assert.equal(token.tooltip.renderable, false);
+  assert.equal(token.tooltip.renderable, true);
   assert.equal(token.tooltip.alpha, 0.43);
   assert.deepEqual([token.mesh.x, token.mesh.y], [token.center.x, token.center.y]);
   assert.deepEqual([token.mesh.scale.x, token.mesh.scale.y], [1, 1]);
   assert.equal(token.mesh.alpha, 1);
-  assert.deepEqual([token.tooltip.x, token.tooltip.y], [63, -7]);
-  assert.deepEqual([token.levelIndicator.x, token.levelIndicator.y], [61, -29]);
+  assertClose(token.tooltip.x, 63);
+  assertClose(token.tooltip.y, -7);
+  assertClose(token.levelIndicator.x, 61);
+  assertClose(token.levelIndicator.y, -29);
   assert.equal(visual.container.destroyed, true);
 });
 
@@ -221,8 +228,10 @@ test("keeps the ground base snapped while only the rendered mesh moves", () => {
     [token.center.x, token.center.y]
   );
   assert.ok(offset.x < 0 && offset.y < 0);
-  assert.deepEqual([token.tooltip.x, token.tooltip.y], [50, -4]);
-  assert.deepEqual([token.levelIndicator.x, token.levelIndicator.y], [50, -24]);
+  assertClose(token.tooltip.x, 50 + offset.x);
+  assertClose(token.tooltip.y, -4 + offset.y);
+  assertClose(token.levelIndicator.x, 50 + offset.x);
+  assertClose(token.levelIndicator.y, -24 + offset.y);
 
   // Simulate Foundry's refreshPosition at a snapped drag destination. Core
   // resets the mesh to center before the module's refreshToken hook runs.
@@ -264,6 +273,8 @@ test("composes Z Scatter offsets into the base, lifted art, native UI, and hit a
     assert.deepEqual([visual.container.x, visual.container.y], [18, -10]);
     assertClose(token.mesh.x, 68 + visual.metrics.token.offsetX);
     assertClose(token.mesh.y, 40 + visual.metrics.token.offsetY);
+    assertClose(token.tooltip.x, 68 + visual.metrics.token.offsetX);
+    assertClose(token.tooltip.y, -12 + visual.metrics.token.offsetY);
     assert.equal(token.hitArea.contains(20, 0), true, "scattered base should remain clickable");
     assert.equal(
       token.hitArea.contains(50 + 18 + visual.metrics.token.offsetX, 50 - 10 + visual.metrics.token.offsetY),
@@ -277,6 +288,8 @@ test("composes Z Scatter offsets into the base, lifted art, native UI, and hit a
     assert.deepEqual([visual.container.x, visual.container.y], [-14, 12]);
     assertClose(token.mesh.x, 36 + visual.metrics.token.offsetX);
     assertClose(token.mesh.y, 62 + visual.metrics.token.offsetY);
+    assertClose(token.tooltip.x, 36 + visual.metrics.token.offsetX);
+    assertClose(token.tooltip.y, 10 + visual.metrics.token.offsetY);
 
     visual.destroy();
     assert.strictEqual(token.hitArea, latestScatterHitArea);
@@ -762,17 +775,22 @@ test("samples core elevation frames and hides geometry for secret Tokens", () =>
   layer.deactivate(readyCanvas);
 });
 
-test("does not fade or reposition native height UI during core elevation animation", () => {
+test("moves native height UI above core elevation frames without fading it", () => {
   const token = makeToken(10);
   token.tooltip.alpha = 0.74;
   const visual = new FlyingTokenVisual(token, settings);
-  visual.beginCoreAnimation(60);
-  visual.syncCoreElevation(30, { active: true });
+  visual.beginCoreAnimation(30);
+  visual.syncCoreElevation(30, { active: false });
   assert.equal(token.tooltip.alpha, 0.74);
-  assert.deepEqual([token.tooltip.x, token.tooltip.y], [50, -4]);
-  assert.deepEqual([token.levelIndicator.x, token.levelIndicator.y], [50, -24]);
+  assertClose(token.tooltip.x, 50 + visual.metrics.token.offsetX);
+  assertClose(token.tooltip.y, -4 + visual.metrics.token.offsetY);
+  assertClose(token.levelIndicator.x, 50 + visual.metrics.token.offsetX);
+  assertClose(token.levelIndicator.y, -24 + visual.metrics.token.offsetY);
+  visual.beginCoreAnimation(60);
   visual.syncCoreElevation(60, { active: false });
   assert.equal(token.tooltip.alpha, 0.74);
+  assertClose(token.tooltip.x, 50 + visual.metrics.token.offsetX);
+  assertClose(token.tooltip.y, -4 + visual.metrics.token.offsetY);
   visual.destroy();
 });
 

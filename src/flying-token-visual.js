@@ -239,6 +239,7 @@ export class FlyingTokenVisual {
     this.#syncCompatibility({ enabled: this.liftEnabled || (this.displayElevation > 0) });
     const positionRefreshed = flags.refreshPosition || flags.refreshTransform || flags.redraw;
     const uiBaseRefreshed = flags.refreshSize || flags.refreshTransform || flags.redraw;
+    const uiRetainsOwnedOffset = flags.refreshTooltip && !uiBaseRefreshed;
     const meshScaleBaseRefreshed = flags.refreshSize
       || flags.refreshTransform
       || flags.refreshMesh
@@ -250,7 +251,8 @@ export class FlyingTokenVisual {
         meshBaseRefreshed: positionRefreshed,
         meshScaleBaseRefreshed,
         meshAlphaBaseRefreshed,
-        uiBaseRefreshed
+        uiBaseRefreshed,
+        uiRetainsOwnedOffset
       });
       return;
     }
@@ -264,6 +266,7 @@ export class FlyingTokenVisual {
       && !meshScaleBaseRefreshed
       && !meshAlphaBaseRefreshed
       && !uiBaseRefreshed
+      && !uiRetainsOwnedOffset
       && !this.zScatterCompatibility.state.supported
       && this.liftEnabled
       && this.#shouldEnableTokenLift();
@@ -274,7 +277,8 @@ export class FlyingTokenVisual {
         meshBaseRefreshed: positionRefreshed,
         meshScaleBaseRefreshed,
         meshAlphaBaseRefreshed,
-        uiBaseRefreshed
+        uiBaseRefreshed,
+        uiRetainsOwnedOffset
       });
     }
   }
@@ -283,7 +287,8 @@ export class FlyingTokenVisual {
     meshBaseRefreshed = false,
     meshScaleBaseRefreshed = false,
     meshAlphaBaseRefreshed = false,
-    uiBaseRefreshed = false
+    uiBaseRefreshed = false,
+    uiRetainsOwnedOffset = false
   } = {}) {
     if (this.container.destroyed || this.token.destroyed) return;
     this.#syncCompatibility({ enabled: (this.displayElevation > 0) || (this.targetElevation > 0) });
@@ -313,7 +318,8 @@ export class FlyingTokenVisual {
       meshBaseRefreshed,
       meshScaleBaseRefreshed,
       meshAlphaBaseRefreshed,
-      uiBaseRefreshed
+      uiBaseRefreshed,
+      uiRetainsOwnedOffset
     });
     this.lastAnimatedRenderAt = performance.now();
   }
@@ -339,7 +345,8 @@ export class FlyingTokenVisual {
     meshBaseRefreshed = false,
     meshScaleBaseRefreshed = false,
     meshAlphaBaseRefreshed = false,
-    uiBaseRefreshed = false
+    uiBaseRefreshed = false,
+    uiRetainsOwnedOffset = false
   } = {}) {
     const metrics = this.metrics;
     if (!metrics) return;
@@ -351,6 +358,7 @@ export class FlyingTokenVisual {
       meshScaleBaseRefreshed,
       meshAlphaBaseRefreshed,
       uiBaseRefreshed,
+      uiRetainsOwnedOffset,
       externalLayout: this.zScatterCompatibility.state
     });
     this.liftEnabled = enabled;

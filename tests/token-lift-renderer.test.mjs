@@ -45,8 +45,8 @@ test("reapplies a visual lift after core movement without changing the ground ce
   const renderer = new TokenLiftRenderer(token);
   renderer.apply({ offsetX: -20, offsetY: -100 });
   assert.deepEqual([token.mesh.position.x, token.mesh.position.y], [30, -50]);
-  assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [50, -4]);
-  assert.deepEqual([token.levelIndicator.position.x, token.levelIndicator.position.y], [50, -24]);
+  assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [30, -104]);
+  assert.deepEqual([token.levelIndicator.position.x, token.levelIndicator.position.y], [30, -124]);
 
   token.baseX = 250;
   token.baseY = 150;
@@ -89,6 +89,7 @@ test("composes and reacquires exact Z Scatter bases without claiming its offset"
     offsetY: 5,
     bases: {
       mesh: { x: 60, y: 55 },
+      tooltip: { x: 60, y: 3 },
       nameplate: { x: 60, y: 111 },
       bars: { x: 10, y: 5 },
       effects: { x: 10, y: 5 }
@@ -107,10 +108,10 @@ test("composes and reacquires exact Z Scatter bases without claiming its offset"
   }, { externalLayout: layout });
 
   assert.deepEqual([token.mesh.position.x, token.mesh.position.y], [40, 5]);
-  assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [60, 3]);
+  assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [40, -47]);
   assert.deepEqual([token.nameplate.position.x, token.nameplate.position.y], [40, 61]);
   assert.deepEqual([token.bars.position.x, token.bars.position.y], [-10, -45]);
-  assert.deepEqual([token.levelIndicator.position.x, token.levelIndicator.position.y], [50, -24]);
+  assert.deepEqual([token.levelIndicator.position.x, token.levelIndicator.position.y], [40, -69]);
 
   // Z Scatter may write outside refreshToken. The low-frequency compatibility
   // pass recognizes only these exact bases and safely reapplies the lift.
@@ -121,7 +122,7 @@ test("composes and reacquires exact Z Scatter bases without claiming its offset"
   token.effects.position.set(10, 5);
   renderer.applyAmbient(1, layout);
   assert.deepEqual([token.mesh.position.x, token.mesh.position.y], [40, 6]);
-  assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [60, 3]);
+  assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [40, -46]);
 
   renderer.restore();
   assert.deepEqual([token.mesh.position.x, token.mesh.position.y], [60, 55]);
@@ -146,14 +147,14 @@ test("resumes ownership after a confirmed core position refresh", () => {
   assert.deepEqual([token.mesh.position.x, token.mesh.position.y], [50, 50]);
 });
 
-test("moves artwork UI while leaving native elevation UI at core positions", () => {
+test("moves native elevation labels with the artwork and rebases core layout", () => {
   const token = makeToken();
   const renderer = new TokenLiftRenderer(token);
   const pose = { offsetX: -15, offsetY: -80 };
   renderer.apply(pose);
 
-  assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [50, -4]);
-  assert.deepEqual([token.levelIndicator.position.x, token.levelIndicator.position.y], [50, -24]);
+  assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [35, -84]);
+  assert.deepEqual([token.levelIndicator.position.x, token.levelIndicator.position.y], [35, -104]);
   assert.deepEqual([token.nameplate.position.x, token.nameplate.position.y], [35, 24]);
   assert.deepEqual([token.bars.position.x, token.bars.position.y], [-15, -80]);
   assert.deepEqual([token.effects.position.x, token.effects.position.y], [-15, -80]);
@@ -163,8 +164,8 @@ test("moves artwork UI while leaving native elevation UI at core positions", () 
   token.levelIndicator.position.set(60, -28);
   token.nameplate.position.set(60, 126);
   renderer.apply(pose, { uiBaseRefreshed: true });
-  assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [60, -6]);
-  assert.deepEqual([token.levelIndicator.position.x, token.levelIndicator.position.y], [60, -28]);
+  assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [45, -86]);
+  assert.deepEqual([token.levelIndicator.position.x, token.levelIndicator.position.y], [45, -108]);
   assert.deepEqual([token.nameplate.position.x, token.nameplate.position.y], [45, 46]);
 
   renderer.restore();
@@ -173,7 +174,7 @@ test("moves artwork UI while leaving native elevation UI at core positions", () 
   assert.deepEqual([token.nameplate.position.x, token.nameplate.position.y], [60, 126]);
 });
 
-test("never writes native elevation UI during tooltip refreshes", () => {
+test("keeps the Level indicator above lifted artwork through tooltip refreshes", () => {
   const token = makeToken();
   const renderer = new TokenLiftRenderer(token);
   const pose = { offsetX: -15, offsetY: -80 };
@@ -181,9 +182,9 @@ test("never writes native elevation UI during tooltip refreshes", () => {
 
   token.tooltip.position.set(63, -7);
   token.levelIndicator.position.y -= 6;
-  renderer.apply(pose);
+  renderer.apply(pose, { uiRetainsOwnedOffset: true });
   assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [63, -7]);
-  assert.deepEqual([token.levelIndicator.position.x, token.levelIndicator.position.y], [50, -30]);
+  assert.deepEqual([token.levelIndicator.position.x, token.levelIndicator.position.y], [35, -110]);
   renderer.restore();
   assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [63, -7]);
   assert.deepEqual([token.levelIndicator.position.x, token.levelIndicator.position.y], [50, -30]);
@@ -247,7 +248,7 @@ test("preserves a nearby absolute mesh position written after this module", () =
   assert.deepEqual([token.mesh.position.x, token.mesh.position.y], [40, -40]);
 });
 
-test("composes ambient motion into artwork UI without moving native elevation labels", () => {
+test("composes ambient motion into artwork UI and native elevation-label positions", () => {
   const token = makeToken();
   const renderer = new TokenLiftRenderer(token);
   renderer.apply({
@@ -257,8 +258,8 @@ test("composes ambient motion into artwork UI without moving native elevation la
   });
 
   assert.deepEqual([token.mesh.position.x, token.mesh.position.y], [40, 22]);
-  assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [50, -4]);
-  assert.deepEqual([token.levelIndicator.position.x, token.levelIndicator.position.y], [50, -24]);
+  assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [40, -32]);
+  assert.deepEqual([token.levelIndicator.position.x, token.levelIndicator.position.y], [40, -52]);
   assert.deepEqual([token.nameplate.position.x, token.nameplate.position.y], [40, 76]);
   assert.deepEqual([token.bars.position.x, token.bars.position.y], [-10, -28]);
   assert.deepEqual([token.effects.position.x, token.effects.position.y], [-10, -28]);
@@ -354,7 +355,7 @@ test("authoritative core refresh rebases even when its value equals the last vis
   assert.deepEqual([token.mesh.position.x, token.mesh.position.y], [40, 50]);
   assert.deepEqual([token.mesh.scale.x, token.mesh.scale.y], [1.2, 1.2]);
   assertClose(token.mesh.alpha, 0.4);
-  assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [50, -4]);
+  assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [40, -4]);
 
   // Core writes new bases which happen to equal every previous module value.
   token.baseX = 40;
@@ -372,7 +373,7 @@ test("authoritative core refresh rebases even when its value equals the last vis
   assert.deepEqual([token.mesh.position.x, token.mesh.position.y], [30, 50]);
   assert.deepEqual([token.mesh.scale.x, token.mesh.scale.y], [1.44, 1.44]);
   assertClose(token.mesh.alpha, 0.2);
-  assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [40, -4]);
+  assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [30, -4]);
   renderer.restore();
   assert.deepEqual([token.mesh.position.x, token.mesh.position.y], [40, 50]);
   assert.deepEqual([token.mesh.scale.x, token.mesh.scale.y], [1.2, 1.2]);

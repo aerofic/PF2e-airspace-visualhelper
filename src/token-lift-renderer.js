@@ -1,9 +1,9 @@
 import { VISUAL_EPSILON } from "./constants.js";
 
-// Native elevation labels are intentionally absent. Foundry/PF2e owns their
-// position, content, visibility, and alpha without any module intervention.
-const ART_UI_KEYS = ["nameplate", "bars", "effects"];
-const SIZE_REFRESHED_UI_KEYS = new Set(["nameplate"]);
+// Position follows the lifted artwork, while Foundry/PF2e keeps exclusive
+// ownership of label content, units, visibility, alpha, and text styling.
+const ART_UI_KEYS = ["tooltip", "levelIndicator", "nameplate", "bars", "effects"];
+const SIZE_REFRESHED_UI_KEYS = new Set(["tooltip", "levelIndicator", "nameplate"]);
 
 /**
  * Applies a reversible visual offset to Foundry's Primary Token mesh and the
@@ -43,6 +43,7 @@ export class TokenLiftRenderer {
     meshScaleBaseRefreshed = false,
     meshAlphaBaseRefreshed = false,
     uiBaseRefreshed = false,
+    uiRetainsOwnedOffset = false,
     externalLayout = null
   } = {}) {
     this.#enabled = !!enabled;
@@ -56,18 +57,23 @@ export class TokenLiftRenderer {
       this.#offsetX,
       this.#offsetY + ambientY,
       meshBaseRefreshed,
+      false,
       externalLayout?.bases?.mesh ?? null
     );
     this.#meshScaleTarget.apply(mesh, enabled ? scale : 1, meshScaleBaseRefreshed);
     this.#meshAlphaTarget.apply(mesh, enabled ? alpha : 1, meshAlphaBaseRefreshed);
     for (const [key, target] of this.#uiTargets) {
+      const ownsExternalOffset = externalLayout?.supported && (key === "levelIndicator");
       target.applyXY(
         this.#token?.[key],
-        this.#offsetX,
-        this.#offsetY + ambientY,
-        // v14 _refreshSize resets the nameplate position; bars and effects
-        // only redraw their children and retain their container pose.
+        this.#offsetX + (ownsExternalOffset ? externalLayout.offsetX : 0),
+        this.#offsetY + ambientY + (ownsExternalOffset ? externalLayout.offsetY : 0),
+        // v14 _refreshSize resets labels and nameplate positions; bars and
+        // effects only redraw their children and retain their container pose.
         uiBaseRefreshed && SIZE_REFRESHED_UI_KEYS.has(key),
+        // v14 _refreshTooltip derives the Level indicator from the already
+        // lifted tooltip. Fold that known delta into the indicator's base.
+        uiRetainsOwnedOffset && (key === "levelIndicator"),
         externalLayout?.bases?.[key] ?? null
       );
     }
@@ -88,10 +94,11 @@ export class TokenLiftRenderer {
       externalLayout?.bases?.mesh ?? null
     );
     for (const [key, target] of this.#uiTargets) {
+      const ownsExternalOffset = externalLayout?.supported && (key === "levelIndicator");
       target.updateOwnedOffset(
         this.#token?.[key],
-        this.#offsetX,
-        this.#offsetY + ambientY,
+        this.#offsetX + (ownsExternalOffset ? externalLayout.offsetX : 0),
+        this.#offsetY + ambientY + (ownsExternalOffset ? externalLayout.offsetY : 0),
         externalLayout?.bases?.[key] ?? null
       );
     }
@@ -105,6 +112,7 @@ export class TokenLiftRenderer {
       this.#offsetX,
       this.#offsetY + finiteOrZero(ambientOffsetY),
       true,
+      false,
       externalLayout?.bases?.mesh ?? null
     );
   }
@@ -145,6 +153,7 @@ class ReversibleOffsetTarget {
     ownedX,
     ownedY,
     baseRefreshed = false,
+    retainsOwnedOffset = false,
     authoritativeBase = null
   ) {
     if (!target || target.destroyed) {
@@ -208,11 +217,17 @@ class ReversibleOffsetTarget {
       this.#captureBase(currentX, currentY, referenceX, referenceY);
       this.yieldedToLaterWriter = false;
     } else if (!matchesLastWrite) {
-      // A later module owns this position now. Arbitrary absolute and
-      // additive writes cannot be distinguished safely, so yield until a
-      // confirmed core base refresh instead of doubling or clobbering it.
-      this.yieldedToLaterWriter = true;
-      return;
+      if (retainsOwnedOffset) {
+        this.baseX += currentX - this.lastWrittenX;
+        this.baseY += currentY - this.lastWrittenY;
+        this.yieldedToLaterWriter = false;
+      } else {
+        // A later module owns this position now. Arbitrary absolute and
+        // additive writes cannot be distinguished safely, so yield until a
+        // confirmed core base refresh instead of doubling or clobbering it.
+        this.yieldedToLaterWriter = true;
+        return;
+      }
     } else {
       this.yieldedToLaterWriter = false;
     }
