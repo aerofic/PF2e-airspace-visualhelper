@@ -15,10 +15,19 @@ globalThis.foundry = {
 globalThis.game = { user: { id: "user" } };
 
 const {
+  ALTITUDE_HUD_DEFAULT_POSITION,
+  AltitudeHud,
   buildAltitudeRelations,
   extractFlySpeed,
   isHudTokenVisible
 } = await import("../src/altitude-hud.js");
+
+test("defaults to a wide top strip while leaving horizontal centering to Foundry", () => {
+  assert.deepEqual(AltitudeHud.DEFAULT_OPTIONS.position, ALTITUDE_HUD_DEFAULT_POSITION);
+  assert.equal(ALTITUDE_HUD_DEFAULT_POSITION.top, 52);
+  assert.ok(ALTITUDE_HUD_DEFAULT_POSITION.width > ALTITUDE_HUD_DEFAULT_POSITION.height * 3);
+  assert.equal("left" in ALTITUDE_HUD_DEFAULT_POSITION, false);
+});
 
 test("reads PF2e prepared Fly Speed only with observer permission", () => {
   const actor = {

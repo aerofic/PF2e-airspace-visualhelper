@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1 — Translucent Top HUD
+
+- Changed the Airspace HUD default layout to a wide, horizontally centered top strip.
+- Made the header, panel, nodes, and relation surfaces translucent without reducing text opacity.
+- Added compact horizontal scrolling plus responsive and high-contrast fallbacks.
+
 ## 0.2.0 — V2 Airspace HUD
 
 - Added the ApplicationV2 Airspace HUD with a proportional 5 ft altitude axis.

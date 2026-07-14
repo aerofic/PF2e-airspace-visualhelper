@@ -16,7 +16,14 @@ import { normalizeHudElevation } from "./visual-math.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
-/** Floating ApplicationV2 airspace panel for the currently viewed Scene. */
+/** Default to a compact top strip while keeping the Application freely movable. */
+export const ALTITUDE_HUD_DEFAULT_POSITION = Object.freeze({
+  width: 860,
+  height: 260,
+  top: 52
+});
+
+/** ApplicationV2 airspace HUD for the currently viewed Scene. */
 export class AltitudeHud extends HandlebarsApplicationMixin(ApplicationV2) {
   static DEFAULT_OPTIONS = {
     id: "pf2e-flying-visual-helper-airspace",
@@ -27,7 +34,9 @@ export class AltitudeHud extends HandlebarsApplicationMixin(ApplicationV2) {
       resizable: true,
       minimizable: true
     },
-    position: { width: 410, height: 620 },
+    // Omitting left lets ApplicationV2 center the HUD horizontally on its
+    // first render. Its stored position remains user-draggable thereafter.
+    position: { ...ALTITUDE_HUD_DEFAULT_POSITION },
     actions: {
       setFilter: AltitudeHud.#onSetFilter,
       focusToken: AltitudeHud.#onFocusToken
