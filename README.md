@@ -1,4 +1,4 @@
-# PF2e Flying Visual Helper V2 / 0.4.8
+# PF2e Flying Visual Helper V2 / 0.4.9
 
 面向 Foundry VTT v14 与 PF2e 8.x 的纯视觉空域辅助模块。V2 在传统 2D 地图上组合透明飞行支架、阴影、地面投影与 ApplicationV2 高度 HUD，不实现真正 3D，也不修改 PF2e 规则。
 

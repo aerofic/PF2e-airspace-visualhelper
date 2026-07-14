@@ -35,7 +35,20 @@ export class ZScatterCompatibility {
   sync({ liftX = 0, liftY = 0, enabled = true } = {}) {
     const previousX = this.#state.offsetX;
     const previousY = this.#state.offsetY;
-    const active = !!enabled && this.available && !isTokenMoving(this.#token);
+    const available = this.available;
+    const moving = !!enabled && available && isTokenMoving(this.#token);
+    if (moving) {
+      // Z Scatter deliberately suspends its visual offset while Foundry moves
+      // a Token. Core then restores the mesh to Token#center and Z Scatter can
+      // restore native local UI positions. Keep that exact zero-offset layout
+      // authoritative so the flight lift (including native elevation labels)
+      // can be recomposed throughout the drag/movement animation.
+      this.#restoreHitArea();
+      this.#state = createMovementState(this.#token);
+      return !positionsEqual(previousX, previousY, 0, 0);
+    }
+
+    const active = !!enabled && available;
     if (!active) {
       this.#restoreHitArea();
       this.#state = createNeutralState();
@@ -204,6 +217,14 @@ function createSupportedState(token, offsetX, offsetY) {
       bars: { x: offsetX, y: offsetY },
       effects: { x: offsetX, y: offsetY }
     }
+  };
+}
+
+function createMovementState(token) {
+  return {
+    ...createSupportedState(token, 0, 0),
+    active: false,
+    suspended: true
   };
 }
 

@@ -112,5 +112,10 @@ test("suspends composition during core movement and restores Z Scatter ownership
   token.animationContexts.set("movement", { to: { x: 300, y: 300 } });
   adapter.sync({ liftX: -20, liftY: -45 });
   assert.equal(adapter.state.active, false);
+  assert.equal(adapter.state.supported, true);
+  assert.equal(adapter.state.suspended, true);
+  assert.deepEqual([adapter.state.offsetX, adapter.state.offsetY], [0, 0]);
+  assert.deepEqual(adapter.state.bases.mesh, { x: 250, y: 350 });
+  assert.deepEqual(adapter.state.bases.tooltip, { x: 50, y: -2 });
   assert.strictEqual(token.hitArea, scatteredHitArea);
 });

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.9 — Lifted Labels During Movement
+
+- Fixed Foundry/PF2e native elevation labels dropping to the acrylic base while an airborne Token is dragged or animated to a new grid position with Z Scatter active.
+- Represented Z Scatter's intentional movement suspension as an authoritative zero-offset layout, allowing the airborne lift to remain composed without retaining a stale scatter offset.
+- Kept label text, unit formatting, styling, visibility, alpha, and native relative placement under Foundry/PF2e ownership.
+- Preserved Z Scatter's hit-area ownership during movement and restored its latest scattered layout after movement ends.
+- Added renderer-level and full Canvas-visual regression coverage for the movement transition.
+
 ## 0.4.8 — Stronger Ambient Float
 
 - Increased the airborne Token bob amplitude by approximately 25% for a more readable hovering effect.

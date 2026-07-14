@@ -179,6 +179,62 @@ test("recomposes lifted labels when core refresh runs before Z Scatter", () => {
   assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [60, 3]);
 });
 
+test("keeps native elevation labels lifted when Z Scatter suspends during movement", () => {
+  const token = makeToken();
+  const renderer = new TokenLiftRenderer(token);
+  const pose = { offsetX: -20, offsetY: -50 };
+  const scatteredLayout = {
+    active: true,
+    supported: true,
+    offsetX: 10,
+    offsetY: 5,
+    bases: {
+      mesh: { x: 60, y: 55 },
+      tooltip: { x: 60, y: 3 },
+      nameplate: { x: 60, y: 107 },
+      bars: { x: 10, y: 5 },
+      effects: { x: 10, y: 5 }
+    }
+  };
+  const movingLayout = {
+    active: false,
+    supported: true,
+    suspended: true,
+    offsetX: 0,
+    offsetY: 0,
+    bases: {
+      mesh: { x: 50, y: 50 },
+      tooltip: { x: 50, y: -2 },
+      nameplate: { x: 50, y: 102 },
+      bars: { x: 0, y: 0 },
+      effects: { x: 0, y: 0 }
+    }
+  };
+
+  token.mesh.position.set(60, 55);
+  token.tooltip.position.set(60, 3);
+  token.nameplate.position.set(60, 107);
+  renderer.apply(pose, { externalLayout: scatteredLayout });
+
+  // Foundry and Z Scatter return movement visuals to the unscattered base.
+  token.mesh.position.set(50, 50);
+  token.tooltip.position.set(50, -2);
+  token.nameplate.position.set(50, 102);
+  token.bars.position.set(0, 0);
+  token.effects.position.set(0, 0);
+  renderer.apply(pose, {
+    externalLayout: movingLayout,
+    meshBaseRefreshed: true
+  });
+
+  assert.deepEqual([token.mesh.position.x, token.mesh.position.y], [30, 0]);
+  assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [30, -52]);
+  assert.deepEqual([token.levelIndicator.position.x, token.levelIndicator.position.y], [30, -74]);
+  assert.deepEqual([token.nameplate.position.x, token.nameplate.position.y], [30, 52]);
+  renderer.restore();
+  assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [50, -2]);
+});
+
 test("resumes ownership after a confirmed core position refresh", () => {
   const token = makeToken();
   const renderer = new TokenLiftRenderer(token);

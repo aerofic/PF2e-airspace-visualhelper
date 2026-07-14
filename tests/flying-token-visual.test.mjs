@@ -327,6 +327,44 @@ test("composes Z Scatter offsets into the base, lifted art, native UI, and hit a
   }
 });
 
+test("keeps the native height label above the Token while Z Scatter suspends for movement", () => {
+  const previousGame = globalThis.game;
+  globalThis.game = {
+    modules: new Map([["z-scatter", { active: true }]])
+  };
+  try {
+    const token = makeToken(60);
+    token.shape = new FakeRectangle(0, 0, 100, 100);
+    const scatteredHitArea = applyFakeZScatter(token, 18, -10);
+    const visual = new FlyingTokenVisual(token, settings);
+    visual.setReducedMotion(true);
+    const { offsetX, offsetY } = visual.metrics.token;
+
+    token.animationContexts.set("movement", { to: { x: 100, y: 0 } });
+    // Core restores the moving mesh, while Z Scatter's zero-offset movement
+    // presentation restores the native local UI anchors.
+    token.mesh.position.set(token.center.x, token.center.y);
+    token.tooltip.position.set(50, -2);
+    token.nameplate.position.set(50, 102);
+    token.bars.position.set(0, 0);
+    token.effects.position.set(0, 0);
+    visual.onRefresh({ refreshPosition: true });
+
+    assert.deepEqual([visual.container.x, visual.container.y], [0, 0]);
+    assertClose(token.mesh.x, token.center.x + offsetX);
+    assertClose(token.mesh.y, token.center.y + offsetY);
+    assertClose(token.tooltip.x, 50 + offsetX);
+    assertClose(token.tooltip.y, -2 + offsetY);
+    assert.ok(token.tooltip.y < -2, "native height label must remain above the lifted Token");
+
+    visual.destroy();
+    assert.strictEqual(token.hitArea, scatteredHitArea);
+    assert.deepEqual([token.tooltip.x, token.tooltip.y], [50, -2]);
+  } finally {
+    globalThis.game = previousGame;
+  }
+});
+
 test("anchors non-rectangular Token shapes to Foundry's actual local center", () => {
   const token = makeToken(60);
   token.localCenter = { x: 42, y: 61 };
