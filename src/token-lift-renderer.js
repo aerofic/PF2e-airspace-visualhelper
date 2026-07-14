@@ -202,10 +202,14 @@ class ReversibleOffsetTarget {
       && !positionsEqual(referenceX, referenceY, this.lastReferenceX, this.lastReferenceY);
 
     if (externalBase) {
-      if (!matchesLastWrite && !matchesExternalBase) {
+      if (!matchesLastWrite && !matchesExternalBase && !baseRefreshed) {
         // The adapter only reclaims a target when it still contains our exact
-        // write or Z Scatter's exact documented base. Any third value belongs
-        // to an unknown later writer and remains untouched.
+        // write or Z Scatter's exact documented base. A confirmed core refresh
+        // is the one exception: Token.refresh() resets mesh/label geometry
+        // before Z Scatter's hook reapplies its layout, so immediately compose
+        // from the adapter's authoritative base instead of leaving the label
+        // visibly stranded on the ground. Any unconfirmed third value still
+        // belongs to an unknown later writer and remains untouched.
         this.yieldedToLaterWriter = true;
         return;
       }

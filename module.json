@@ -2,7 +2,7 @@
   "id": "pf2e-flying-visual-helper",
   "title": "PF2e Flying Visual Helper",
   "description": "An opt-in, full-view PF2e airspace HUD with acrylic flight stands, native elevation labels that follow lifted art, and optional Z Scatter compatibility for Foundry VTT v14.",
-  "version": "0.4.6",
+  "version": "0.4.7",
   "compatibility": {
     "minimum": "14.360",
     "verified": "14.363"

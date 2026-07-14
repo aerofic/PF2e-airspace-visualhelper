@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.7 — Z Scatter Label Refresh Ordering
+
+- Fixed native elevation labels dropping back to the acrylic base when the Z Scatter toolbar toggle refreshed every Token.
+- Recognized a confirmed Foundry core geometry refresh as an authoritative transition even when it runs before Z Scatter's `refreshToken` hook.
+- Immediately recomposed the known Z Scatter base, airborne lift, and native label position instead of permanently yielding ownership.
+- Preserved the existing last-write protection for unconfirmed third-party positions and kept label content, style, alpha, and visibility untouched.
+- Added a deterministic regression test for the core-before-Z-Scatter refresh order and exact teardown restoration.
+
 ## 0.4.6 — Visible Acrylic Base Layering
 
 - Made each acrylic stand container participate in Primary Canvas sorting at its flying Token's current animated visual elevation.

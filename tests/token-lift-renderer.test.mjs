@@ -132,6 +132,53 @@ test("composes and reacquires exact Z Scatter bases without claiming its offset"
   assert.deepEqual([token.levelIndicator.position.x, token.levelIndicator.position.y], [50, -24]);
 });
 
+test("recomposes lifted labels when core refresh runs before Z Scatter", () => {
+  const token = makeToken();
+  const renderer = new TokenLiftRenderer(token);
+  const pose = { offsetX: -20, offsetY: -50 };
+  const layout = {
+    active: true,
+    supported: true,
+    offsetX: 10,
+    offsetY: 5,
+    bases: {
+      mesh: { x: 60, y: 55 },
+      tooltip: { x: 60, y: 3 },
+      nameplate: { x: 60, y: 111 },
+      bars: { x: 10, y: 5 },
+      effects: { x: 10, y: 5 }
+    }
+  };
+
+  token.mesh.position.set(60, 55);
+  token.tooltip.position.set(60, 3);
+  token.nameplate.position.set(60, 111);
+  renderer.apply(pose, { externalLayout: layout });
+  assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [40, -47]);
+
+  // Enabling Z Scatter calls Token.refresh() for every Token. Core size and
+  // transform work can run before Z Scatter's refreshToken hook, temporarily
+  // restoring native ground positions while the detected scatter layout is
+  // still authoritative.
+  token.mesh.position.set(50, 50);
+  token.tooltip.position.set(50, -4);
+  token.levelIndicator.position.set(50, -24);
+  token.nameplate.position.set(50, 104);
+  renderer.apply(pose, {
+    externalLayout: layout,
+    meshBaseRefreshed: true,
+    uiBaseRefreshed: true
+  });
+
+  assert.deepEqual([token.mesh.position.x, token.mesh.position.y], [40, 5]);
+  assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [40, -47]);
+  assert.deepEqual([token.levelIndicator.position.x, token.levelIndicator.position.y], [40, -69]);
+  assert.deepEqual([token.nameplate.position.x, token.nameplate.position.y], [40, 61]);
+  renderer.restore();
+  assert.deepEqual([token.mesh.position.x, token.mesh.position.y], [60, 55]);
+  assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [60, 3]);
+});
+
 test("resumes ownership after a confirmed core position refresh", () => {
   const token = makeToken();
   const renderer = new TokenLiftRenderer(token);
