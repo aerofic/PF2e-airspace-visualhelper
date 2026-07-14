@@ -51,11 +51,12 @@ export class FlyingTokenVisual {
     this.container.eventMode = "none";
     this.container.interactiveChildren = false;
     this.container.sortableChildren = true;
-    // PrimaryCanvasGroup sorts elevation before layer. Elevation 0 plus a
-    // pre-Token sort layer keeps the translucent ground aid above the map and
-    // below normal non-negative Token meshes instead of covering their art.
+    // PrimaryCanvasGroup sorts elevation before layer. Matching the visual's
+    // animated flight elevation keeps its base and stand above lower/ground
+    // Token art. The pre-Token layer still keeps the aid below Token artwork
+    // at the same elevation, including the flying Token it belongs to.
     const tokenSortLayer = Number(parent?.constructor?.SORT_LAYERS?.TOKENS) || 700;
-    this.container.elevation = 0;
+    this.container.elevation = this.displayElevation;
     this.container.sortLayer = tokenSortLayer - 1;
     this.container.sort = -1_000_000;
     this.container.zIndex = -1_000_000;
@@ -291,6 +292,7 @@ export class FlyingTokenVisual {
     uiRetainsOwnedOffset = false
   } = {}) {
     if (this.container.destroyed || this.token.destroyed) return;
+    this.#syncSortElevation();
     this.#syncCompatibility({ enabled: (this.displayElevation > 0) || (this.targetElevation > 0) });
     this.#syncPosition();
     const size = this.token.document.getSize();
@@ -432,6 +434,17 @@ export class FlyingTokenVisual {
       this.container.x = x;
       this.container.y = y;
     }
+  }
+
+  /** Keep PrimaryCanvasGroup ordering aligned with the animated visual height. */
+  #syncSortElevation() {
+    if (this.container.destroyed) return;
+    const elevation = normalizeFlyingElevation(this.displayElevation);
+    if (this.container.elevation === elevation) return;
+    this.container.elevation = elevation;
+    // PrimaryCanvasGroup/Pixi only re-sorts sortable children when dirty.
+    // This is local render state and never changes TokenDocument.elevation.
+    if (this.parent && !this.parent.destroyed) this.parent.sortDirty = true;
   }
 
   #getLocalGround(size) {

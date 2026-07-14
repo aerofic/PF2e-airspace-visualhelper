@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.6 — Visible Acrylic Base Layering
+
+- Made each acrylic stand container participate in Primary Canvas sorting at its flying Token's current animated visual elevation.
+- Placed the stand above lower and ground Token artwork while retaining a pre-Token sort layer so same-height Token art remains on top.
+- Invalidated Primary sorting only when the displayed elevation changes, including smooth takeoff and landing animation frames.
+- Kept the stand non-interactive and left `TokenDocument.elevation`, movement, hit areas, and PF2e rules untouched.
+- Added regression coverage for ground/stand/flying-art order, animation-height updates, sort invalidation, and document-data immutability.
+
 ## 0.4.5 — Full HUD on Activation
 
 - Removed the compact summary-bar state, disclosure action, chevron, and all expand/collapse transitions from the Airspace HUD.

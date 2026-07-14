@@ -19,6 +19,8 @@ class FakePoint {
 }
 
 class FakeContainer {
+  static SORT_LAYERS = { TOKENS: 700 };
+
   constructor() {
     this.children = [];
     this.parent = null;
@@ -59,6 +61,31 @@ class FakeContainer {
     this.destroyed = true;
   }
 }
+
+test("sorts the acrylic base above lower Tokens and below same-height Token art", () => {
+  const parent = new FakeContainer();
+  const token = makeToken(60);
+  const visual = new FlyingTokenVisual(token, settings, { parent });
+  const groundTokenMesh = { id: "ground", elevation: 0, sortLayer: 700, sort: 0 };
+  const ownFlyingMesh = { id: "flying", elevation: 60, sortLayer: 700, sort: 0 };
+  visual.container.id = "stand";
+
+  const ordered = [ownFlyingMesh, visual.container, groundTokenMesh]
+    .sort(comparePrimaryDisplayObjects)
+    .map(object => object.id);
+  assert.deepEqual(ordered, ["ground", "stand", "flying"]);
+  assert.equal(visual.container.elevation, 60);
+  assert.equal(visual.container.sortLayer, 699);
+  assert.equal(visual.container.eventMode, "none");
+  assert.equal(visual.container.interactiveChildren, false);
+
+  parent.sortDirty = false;
+  visual.setElevation(20, { animate: false });
+  assert.equal(visual.container.elevation, 20);
+  assert.equal(parent.sortDirty, true, "height changes must invalidate Primary sorting");
+  assert.equal(token.document.elevation, 60, "visual sorting must not write Token data");
+  visual.destroy();
+});
 
 class FakeGraphics extends FakeContainer {
   constructor() {
@@ -917,6 +944,12 @@ function applyFakeZScatter(token, offsetX, offsetY) {
 
 function assertClose(actual, expected, message) {
   assert.ok(Math.abs(actual - expected) <= 0.000001, message ?? `${actual} != ${expected}`);
+}
+
+function comparePrimaryDisplayObjects(left, right) {
+  return (Number(left.elevation) - Number(right.elevation))
+    || (Number(left.sortLayer) - Number(right.sortLayer))
+    || (Number(left.sort) - Number(right.sort));
 }
 
 function minimumLineY(graphics) {
