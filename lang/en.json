@@ -2,11 +2,11 @@
   "PF2E_FLYING_VISUAL_HELPER.Settings.enabled.name": "Enable Flying Visual Helper",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enabled.hint": "Enable the client-side PF2e airspace visuals and tactical HUD.",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableAltitudeHud.name": "Enable Altitude HUD",
-  "PF2E_FLYING_VISUAL_HELPER.Settings.enableAltitudeHud.hint": "Show the floating ApplicationV2 airspace panel for visible Tokens in the current Scene.",
+  "PF2E_FLYING_VISUAL_HELPER.Settings.enableAltitudeHud.hint": "Show the ultra-compact ApplicationV2 airspace navigation HUD for visible Tokens in the current Scene.",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableGroundProjection.name": "Enable Ground Projection",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableGroundProjection.hint": "Draw a non-interactive dashed flight projection and mark Foundry's actual Token-footprint center.",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableHeightAxis.name": "Enable Height Axis",
-  "PF2E_FLYING_VISUAL_HELPER.Settings.enableHeightAxis.hint": "Use a linearly proportional, scrollable height axis in the Altitude HUD; disable for a compact list.",
+  "PF2E_FLYING_VISUAL_HELPER.Settings.enableHeightAxis.hint": "Use a linearly proportional, scrollable height axis when the HUD details are expanded; disable for a compact Token list. The 360 x 32 navigation bar remains minimal either way.",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableHeightLabel.name": "Enable Height Label",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableHeightLabel.hint": "Use Foundry VTT's native Token elevation tooltip and move it with the lifted art; disable to hide it.",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableStand.name": "Enable Transparent Stand",
@@ -36,5 +36,12 @@
   "PF2E_FLYING_VISUAL_HELPER.Hud.relation.same": "same altitude",
   "PF2E_FLYING_VISUAL_HELPER.Hud.noNearbyAir": "No visible airborne Token is within the visual {radius}-grid radius.",
   "PF2E_FLYING_VISUAL_HELPER.Hud.empty": "No visible Tokens match this filter.",
-  "PF2E_FLYING_VISUAL_HELPER.Hud.controlButton": "Open PF2e Airspace HUD"
+  "PF2E_FLYING_VISUAL_HELPER.Hud.controlButton": "Open PF2e Airspace HUD",
+  "PF2E_FLYING_VISUAL_HELPER.Hud.dragHandle": "Drag the Airspace HUD",
+  "PF2E_FLYING_VISUAL_HELPER.Hud.expandDetails": "Expand airspace details",
+  "PF2E_FLYING_VISUAL_HELPER.Hud.collapseDetails": "Collapse airspace details",
+  "PF2E_FLYING_VISUAL_HELPER.Hud.close": "Close the Airspace HUD",
+  "PF2E_FLYING_VISUAL_HELPER.Hud.summary.selected": "Selected {name} · {elevation} · {count} visible",
+  "PF2E_FLYING_VISUAL_HELPER.Hud.summary.count": "{count} visible · max {elevation}",
+  "PF2E_FLYING_VISUAL_HELPER.Hud.summary.empty": "No visible Tokens"
 }

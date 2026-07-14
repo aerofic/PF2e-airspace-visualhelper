@@ -1,7 +1,31 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
-class FakeApplicationV2 {}
+class FakeApplicationV2 {
+  constructor() {
+    this.rendered = true;
+    this.renderCalls = [];
+    this.positionCalls = [];
+    this.closeCalls = [];
+  }
+
+  render(options = {}) {
+    this.renderCalls.push(options);
+    return Promise.resolve(this);
+  }
+
+  setPosition(position = {}) {
+    this.positionCalls.push({ ...position });
+    return position;
+  }
+
+  close(options = {}) {
+    this.closeCalls.push(options);
+    this.rendered = false;
+    return Promise.resolve(this);
+  }
+}
 globalThis.foundry = {
   applications: {
     api: {
@@ -12,21 +36,129 @@ globalThis.foundry = {
     }
   }
 };
-globalThis.game = { user: { id: "user" } };
+globalThis.game = {
+  user: { id: "user", isGM: true },
+  settings: {
+    get: (_moduleId, key) => key === "enableHeightAxis"
+  },
+  i18n: {
+    localize: key => key,
+    format: (key, data) => `${key}:${JSON.stringify(data)}`
+  }
+};
+globalThis.canvas = createEmptyCanvas();
+globalThis.CONFIG = {
+  Canvas: {
+    pings: {
+      types: { PULL: "pull", PULSE: "pulse" }
+    }
+  }
+};
 
 const {
   ALTITUDE_HUD_DEFAULT_POSITION,
+  ALTITUDE_HUD_EXPANDED_POSITION,
   AltitudeHud,
   buildAltitudeRelations,
   extractFlySpeed,
   isHudTokenVisible
 } = await import("../src/altitude-hud.js");
 
-test("defaults to a wide top strip while leaving horizontal centering to Foundry", () => {
+test("defaults to an exact ultra-compact frameless top HUD", () => {
+  assert.deepEqual(ALTITUDE_HUD_DEFAULT_POSITION, { width: 360, height: 32, top: 52 });
+  assert.deepEqual(ALTITUDE_HUD_EXPANDED_POSITION, { width: 520, height: 260, top: 52 });
   assert.deepEqual(AltitudeHud.DEFAULT_OPTIONS.position, ALTITUDE_HUD_DEFAULT_POSITION);
-  assert.equal(ALTITUDE_HUD_DEFAULT_POSITION.top, 52);
-  assert.ok(ALTITUDE_HUD_DEFAULT_POSITION.width > ALTITUDE_HUD_DEFAULT_POSITION.height * 3);
   assert.equal("left" in ALTITUDE_HUD_DEFAULT_POSITION, false);
+  assert.equal("left" in ALTITUDE_HUD_EXPANDED_POSITION, false);
+  assert.equal(AltitudeHud.DEFAULT_OPTIONS.window.frame, false);
+  assert.equal(AltitudeHud.DEFAULT_OPTIONS.window.resizable, false);
+  assert.equal(AltitudeHud.DEFAULT_OPTIONS.window.minimizable, false);
+});
+
+test("registers compact HUD actions without removing filters or Token focus", () => {
+  const actions = AltitudeHud.DEFAULT_OPTIONS.actions;
+  for (const action of ["toggleDetails", "closeHud", "setFilter", "focusToken"]) {
+    assert.equal(typeof actions[action], "function", `${action} should be an ApplicationV2 action`);
+  }
+});
+
+test("toggles detail state with a main-part render and the matching dimensions", async () => {
+  globalThis.canvas = createEmptyCanvas();
+  const hud = new AltitudeHud();
+  const toggle = AltitudeHud.DEFAULT_OPTIONS.actions.toggleDetails;
+  const event = createActionEvent();
+
+  const compactContext = await hud._prepareContext({});
+  assert.equal(compactContext.isExpanded, false);
+  assert.equal(compactContext.showHeightAxis, false);
+  assert.equal(compactContext.axis, null, "compact HUD should not calculate the proportional axis");
+  assert.deepEqual(compactContext.relations, [], "compact HUD should not build hidden relation rows");
+  await toggle.call(hud, event, {});
+  const expandedContext = await hud._prepareContext({});
+  assert.equal(expandedContext.isExpanded, true);
+  assert.equal(expandedContext.showHeightAxis, true);
+  assert.ok(expandedContext.axis, "expanded HUD should restore the proportional axis");
+  assert.equal(event.prevented, 1);
+  assertMainPartRender(hud.renderCalls.at(-1));
+  assertPositionWasApplied(hud, ALTITUDE_HUD_EXPANDED_POSITION);
+
+  await toggle.call(hud, event, {});
+  assert.equal((await hud._prepareContext({})).isExpanded, false);
+  assert.equal(event.prevented, 2);
+  assertMainPartRender(hud.renderCalls.at(-1));
+  assertPositionWasApplied(hud, ALTITUDE_HUD_DEFAULT_POSITION);
+});
+
+test("keeps the selected filter while compact details are toggled", async () => {
+  globalThis.canvas = createEmptyCanvas();
+  const hud = new AltitudeHud();
+  const setFilter = AltitudeHud.DEFAULT_OPTIONS.actions.setFilter;
+  const toggle = AltitudeHud.DEFAULT_OPTIONS.actions.toggleDetails;
+  const event = createActionEvent();
+
+  await setFilter.call(hud, event, { dataset: { filter: "air" } });
+  assert.equal((await hud._prepareContext({})).filters.find(filter => filter.active)?.id, "air");
+  assertMainPartRender(hud.renderCalls.at(-1));
+
+  await toggle.call(hud, event, {});
+  assert.equal((await hud._prepareContext({})).filters.find(filter => filter.active)?.id, "air");
+  await toggle.call(hud, event, {});
+  assert.equal((await hud._prepareContext({})).filters.find(filter => filter.active)?.id, "air");
+});
+
+test("closes a frameless HUD through its explicit ApplicationV2 action", async () => {
+  const hud = new AltitudeHud();
+  const event = createActionEvent();
+
+  await AltitudeHud.DEFAULT_OPTIONS.actions.closeHud.call(hud, event, {});
+
+  assert.equal(event.prevented, 1);
+  assert.equal(hud.closeCalls.length, 1);
+});
+
+test("template gates all details and exposes an accessible disclosure control", () => {
+  const template = readFileSync(new URL("../templates/altitude-hud.hbs", import.meta.url), "utf8");
+  const detailsElement = /<(?:section|div)\b[^>]*\bclass=["'][^"']*\bairspace-details\b[^"']*["'][^>]*>/i.exec(template);
+  const expandedConditionIndex = template.search(/{{#if\s+isExpanded\s*}}/);
+  assert.ok(expandedConditionIndex >= 0, "details should be conditional on isExpanded");
+  assert.ok(detailsElement, "template should contain an .airspace-details region");
+  assert.ok(
+    detailsElement.index > expandedConditionIndex,
+    ".airspace-details should only occur inside the expanded branch"
+  );
+
+  const toggleTag = findButtonTag(template, "toggleDetails");
+  assert.match(toggleTag, /\bid=["']pf2e-fvh-airspace-summary["']/);
+  assert.match(toggleTag, /\btype=["']button["']/);
+  assert.match(toggleTag, /\baria-expanded=["']{{isExpanded}}["']/);
+  assert.match(toggleTag, /\baria-label=["'][^"']+["']/);
+  const controls = toggleTag.match(/\baria-controls=["']([^"']+)["']/)?.[1];
+  assert.ok(controls, "the disclosure button should name its controlled region");
+  assert.match(template, new RegExp(`\\bid=["']${escapeRegExp(controls)}["']`));
+
+  const closeTag = findButtonTag(template, "closeHud");
+  assert.match(closeTag, /\btype=["']button["']/);
+  assert.match(closeTag, /\baria-label=["'][^"']+["']/);
 });
 
 test("reads PF2e prepared Fly Speed only with observer permission", () => {
@@ -63,3 +195,103 @@ test("excludes invisible, destroyed, and Secret Tokens from HUD rows", () => {
   assert.equal(isHudTokenVisible({ ...visible, destroyed: true }), false);
   assert.equal(isHudTokenVisible({ ...visible, document: { isSecret: true } }), false);
 });
+
+test("preserves Token focus, pan, and ping interaction in the expanded HUD", async () => {
+  const calls = [];
+  const scene = { id: "scene" };
+  const token = {
+    id: "dragon",
+    visible: true,
+    destroyed: false,
+    center: { x: 125, y: 275 },
+    document: {
+      parent: scene,
+      isSecret: false,
+      canUserModify: (_user, permission) => permission === "update"
+    },
+    control: options => calls.push(["control", options]),
+    panCanvas: async options => calls.push(["pan", options])
+  };
+  globalThis.canvas = {
+    ...createEmptyCanvas(),
+    scene,
+    photosensitiveMode: true,
+    tokens: {
+      placeables: [token],
+      controlled: [],
+      get: id => id === token.id ? token : null,
+      activate: options => calls.push(["activate", options])
+    },
+    controls: {
+      drawPing: (point, options) => calls.push(["ping", point, options])
+    }
+  };
+
+  const event = createActionEvent();
+  await AltitudeHud.DEFAULT_OPTIONS.actions.focusToken.call(
+    new AltitudeHud(),
+    event,
+    { dataset: { tokenId: token.id } }
+  );
+
+  assert.equal(event.prevented, 1);
+  assert.deepEqual(calls.map(call => call[0]), ["activate", "control", "pan", "ping"]);
+  assert.deepEqual(calls[0][1], { tool: "select" });
+  assert.deepEqual(calls[1][1], { releaseOthers: true });
+  assert.deepEqual(calls[2][1], { force: true, duration: 0 });
+  assert.deepEqual(calls[3][1], token.center);
+  assert.equal(calls[3][2].style, "pull");
+  assert.equal(calls[3][2].user, game.user);
+});
+
+function createEmptyCanvas() {
+  const scene = { id: "scene", grid: { units: "ft" } };
+  return {
+    ready: true,
+    scene,
+    grid: { size: 100, units: "ft" },
+    dimensions: { size: 100 },
+    tokens: {
+      placeables: [],
+      controlled: [],
+      get: () => null
+    }
+  };
+}
+
+function createActionEvent() {
+  return {
+    prevented: 0,
+    preventDefault() {
+      this.prevented += 1;
+    }
+  };
+}
+
+function assertMainPartRender(options) {
+  assert.deepEqual(options?.parts, ["main"]);
+  assert.notEqual(options?.force, true, "compact state changes must not force ApplicationV2 to maximize");
+}
+
+function assertPositionWasApplied(hud, expected) {
+  const candidates = [
+    ...hud.positionCalls,
+    ...hud.renderCalls.map(call => call?.position).filter(Boolean)
+  ];
+  assert.ok(
+    candidates.some(position => (position.width === expected.width) && (position.height === expected.height)),
+    `expected HUD dimensions ${expected.width}x${expected.height}`
+  );
+}
+
+function findButtonTag(template, action) {
+  const tag = [...template.matchAll(/<button\b[^>]*>/gi)]
+    .map(match => match[0])
+    .find(candidate => new RegExp(`\\bdata-action=["']${escapeRegExp(action)}["']`).test(candidate));
+  assert.ok(tag, `template should include a ${action} button`);
+  return tag;
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}

@@ -2,30 +2,25 @@
   .pf2e-flying-visual-helper {
     --airspace-accent: #76d8ec;
     --airspace-accent-strong: #d5f8ff;
-    --airspace-surface: rgba(11, 24, 34, 0.66);
-    --airspace-surface-soft: rgba(39, 64, 77, 0.34);
-    --airspace-border: rgba(159, 226, 239, 0.3);
+    --airspace-border: rgba(159, 226, 239, 0.18);
+    --airspace-detail-surface: rgba(6, 16, 24, 0.38);
     color: var(--color-text-primary, #eee);
     font-family: var(--font-primary, sans-serif);
   }
 
+  /* A frameless ApplicationV2 does not inherit Foundry's .application
+     positioning. Keep this tiny HUD viewport-relative and above the Canvas. */
   .pf2e-flying-visual-helper.airspace-hud {
-    max-inline-size: calc(100vw - 1rem);
-    max-block-size: min(300px, calc(100vh - 4rem));
-    border-color: var(--airspace-border);
-    background: transparent;
-    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.28);
-  }
-
-  .pf2e-flying-visual-helper.airspace-hud .window-header {
-    border-block-end: 1px solid var(--airspace-border);
-    background: rgba(8, 18, 27, 0.64);
-  }
-
-  .pf2e-flying-visual-helper .window-content {
+    position: fixed;
+    z-index: var(--z-index-window, 100);
+    max-inline-size: calc(100vw - 8px);
+    max-block-size: calc(100vh - 8px);
+    margin: 0;
     padding: 0;
-    overflow: hidden;
+    overflow: visible;
+    border: 0;
     background: transparent;
+    box-shadow: none;
   }
 
   .pf2e-flying-visual-helper .airspace-panel {
@@ -33,93 +28,207 @@
     flex-direction: column;
     block-size: 100%;
     min-block-size: 0;
-    background:
-      radial-gradient(circle at 90% 0%, rgba(118, 216, 236, 0.1), transparent 40%),
-      linear-gradient(180deg, rgba(9, 20, 29, 0.56), rgba(17, 31, 40, 0.48));
+    overflow: visible;
   }
 
-  .pf2e-flying-visual-helper .airspace-toolbar {
+  /* The resting state is deliberately quieter than normal Foundry UI, like a
+     game navigation/minimap overlay. Hover and keyboard focus reveal it. */
+  .pf2e-flying-visual-helper .airspace-microbar {
     display: flex;
-    flex: 0 0 auto;
+    flex: 0 0 32px;
     align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    padding: 0.35rem 0.65rem;
-    border-block-end: 1px solid var(--airspace-border);
+    gap: 2px;
+    box-sizing: border-box;
+    inline-size: 100%;
+    block-size: 32px;
+    padding: 2px 3px;
+    overflow: hidden;
+    border: 1px solid rgba(159, 226, 239, 0.13);
+    border-radius: 7px;
+    background: linear-gradient(90deg, rgba(5, 14, 22, 0.2), rgba(10, 25, 34, 0.12));
+    box-shadow: 0 2px 7px rgba(0, 0, 0, 0.12);
+    opacity: 0.68;
+    backdrop-filter: blur(2px) saturate(0.8);
+    transition: opacity 120ms ease, background-color 120ms ease, border-color 120ms ease;
   }
 
-  .pf2e-flying-visual-helper .airspace-heading {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
+  .pf2e-flying-visual-helper .airspace-microbar:hover,
+  .pf2e-flying-visual-helper .airspace-microbar:focus-within,
+  .pf2e-flying-visual-helper .airspace-panel.is-expanded .airspace-microbar {
+    border-color: rgba(159, 226, 239, 0.28);
+    background: linear-gradient(90deg, rgba(5, 14, 22, 0.42), rgba(10, 25, 34, 0.28));
+    opacity: 0.96;
+  }
+
+  .pf2e-flying-visual-helper .airspace-icon-button,
+  .pf2e-flying-visual-helper button.airspace-summary {
+    min-inline-size: 0;
+    min-block-size: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    color: rgba(231, 248, 251, 0.82);
+    line-height: 1;
+    box-shadow: none;
+  }
+
+  .pf2e-flying-visual-helper .airspace-icon-button {
+    display: grid;
+    place-items: center;
+    flex: 0 0 23px;
+    inline-size: 23px;
+    block-size: 24px;
+    border-radius: 4px;
+    background: transparent;
+    font-size: 0.68rem;
+  }
+
+  .pf2e-flying-visual-helper .airspace-icon-button:hover,
+  .pf2e-flying-visual-helper .airspace-icon-button:focus-visible {
+    background: rgba(213, 248, 255, 0.1);
     color: var(--airspace-accent-strong);
-    font-size: 0.78rem;
-    font-weight: 800;
-    letter-spacing: 0.18em;
-    white-space: nowrap;
   }
 
-  .pf2e-flying-visual-helper .airspace-filters {
+  .pf2e-flying-visual-helper .airspace-drag-handle {
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .pf2e-flying-visual-helper .airspace-drag-handle.is-dragging {
+    cursor: grabbing;
+    background: rgba(118, 216, 236, 0.15);
+  }
+
+  .pf2e-flying-visual-helper .airspace-mini-filters {
     display: flex;
     flex: 0 0 auto;
-    gap: 0.35rem;
+    align-items: center;
+    gap: 1px;
+    padding-inline: 1px 3px;
+    border-inline-end: 1px solid rgba(159, 226, 239, 0.12);
   }
 
   .pf2e-flying-visual-helper button.airspace-filter {
-    min-inline-size: 4.25rem;
-    min-block-size: 1.8rem;
-    margin: 0;
-    border: 1px solid var(--airspace-border);
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.04);
-    color: inherit;
-    font-size: 0.68rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
+    color: rgba(222, 239, 243, 0.57);
   }
 
   .pf2e-flying-visual-helper button.airspace-filter.active {
-    border-color: var(--airspace-accent);
-    background: rgba(118, 216, 236, 0.19);
+    background: rgba(118, 216, 236, 0.14);
     color: var(--airspace-accent-strong);
-    box-shadow: inset 0 0 0 1px rgba(213, 248, 255, 0.14);
+    text-shadow: 0 0 7px rgba(118, 216, 236, 0.5);
+  }
+
+  .pf2e-flying-visual-helper button.airspace-summary {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 5px;
+    inline-size: auto;
+    block-size: 24px;
+    overflow: hidden;
+    border-radius: 4px;
+    background: transparent;
+    font-size: 0.68rem;
+    font-variant-numeric: tabular-nums;
+    text-align: start;
+    white-space: nowrap;
+  }
+
+  .pf2e-flying-visual-helper button.airspace-summary:hover,
+  .pf2e-flying-visual-helper button.airspace-summary:focus-visible {
+    background: rgba(213, 248, 255, 0.07);
+    color: #fff;
+  }
+
+  .pf2e-flying-visual-helper .airspace-summary > span {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .pf2e-flying-visual-helper .airspace-summary-mark {
+    flex: 0 0 auto;
+    color: var(--airspace-accent);
+    font-size: 0.65rem;
+    opacity: 0.8;
+  }
+
+  .pf2e-flying-visual-helper .airspace-chevron {
+    flex: 0 0 auto;
+    margin-inline-end: 2px;
+    font-size: 0.55rem;
+    opacity: 0.62;
+  }
+
+  .pf2e-flying-visual-helper .airspace-close {
+    color: rgba(231, 248, 251, 0.46);
+  }
+
+  .pf2e-flying-visual-helper .airspace-close:hover,
+  .pf2e-flying-visual-helper .airspace-close:focus-visible {
+    color: var(--color-level-error, #ff6b6b);
+  }
+
+  .pf2e-flying-visual-helper .airspace-details {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-block-size: 0;
+    margin-block-start: 3px;
+    overflow: hidden;
+    border: 1px solid var(--airspace-border);
+    border-radius: 7px;
+    background:
+      radial-gradient(circle at 90% 0%, rgba(118, 216, 236, 0.08), transparent 42%),
+      var(--airspace-detail-surface);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+    backdrop-filter: blur(4px) saturate(0.84);
   }
 
   .pf2e-flying-visual-helper .airspace-relations {
     display: grid;
     grid-template-columns: max-content minmax(0, 1fr);
-    flex: 0 1 auto;
+    flex: 0 0 auto;
     align-items: center;
-    gap: 0.7rem;
-    max-block-size: 3.75rem;
-    padding: 0.3rem 0.65rem;
+    gap: 0.45rem;
+    min-block-size: 38px;
+    max-block-size: 44px;
+    padding: 0.2rem 0.4rem;
     overflow: hidden;
-    border-block-end: 1px solid var(--airspace-border);
-    background: rgba(4, 11, 17, 0.24);
+    border-block-end: 1px solid rgba(159, 226, 239, 0.13);
+    background: rgba(4, 11, 17, 0.13);
   }
 
   .pf2e-flying-visual-helper .airspace-relations-heading {
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
-    gap: 0.08rem;
-    margin: 0;
-    font-size: 0.72rem;
-    line-height: 1.2;
-    white-space: nowrap;
+    min-inline-size: 0;
+    max-inline-size: 9rem;
+    gap: 1px;
+    font-size: 0.63rem;
+    line-height: 1.1;
   }
 
   .pf2e-flying-visual-helper .airspace-relations-heading > span {
     color: var(--airspace-accent);
+    font-size: 0.55rem;
     font-weight: 700;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
+  }
+
+  .pf2e-flying-visual-helper .airspace-relations-heading > strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .pf2e-flying-visual-helper .airspace-relations ul {
     display: flex;
-    gap: 0.25rem;
+    gap: 3px;
     margin: 0;
-    padding: 0 0 0.15rem;
+    padding: 0 0 2px;
     overflow-x: auto;
     overscroll-behavior-inline: contain;
     list-style: none;
@@ -127,47 +236,59 @@
   }
 
   .pf2e-flying-visual-helper .airspace-relations li {
-    flex: 0 0 11rem;
+    flex: 0 0 9.5rem;
     margin: 0;
   }
 
   .pf2e-flying-visual-helper .airspace-relations button {
     display: flex;
     justify-content: space-between;
+    gap: 4px;
     inline-size: 100%;
-    min-block-size: 1.65rem;
+    min-block-size: 23px;
     margin: 0;
-    padding: 0.2rem 0.45rem;
+    padding: 2px 5px;
+    overflow: hidden;
     border: 0;
     border-radius: 4px;
     background: rgba(255, 255, 255, 0.035);
     color: inherit;
-    font-size: 0.72rem;
+    font-size: 0.62rem;
     text-align: start;
+    white-space: nowrap;
+  }
+
+  .pf2e-flying-visual-helper .airspace-relations button span {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .pf2e-flying-visual-helper .airspace-relations button strong {
+    flex: 0 0 auto;
     color: var(--airspace-accent-strong);
   }
 
   .pf2e-flying-visual-helper .airspace-empty-relation {
     margin: 0;
+    overflow: hidden;
     color: var(--color-text-subtle, #aaa);
-    font-size: 0.7rem;
+    font-size: 0.62rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .pf2e-flying-visual-helper .airspace-axis-scroll {
-    flex: 1;
+    flex: 1 1 auto;
     min-block-size: 0;
     overflow: auto;
     cursor: grab;
     user-select: none;
     touch-action: pan-x pan-y;
     overscroll-behavior: contain;
-    scrollbar-color: rgba(118, 216, 236, 0.45) transparent;
+    scrollbar-color: rgba(118, 216, 236, 0.36) transparent;
     background-image:
-      linear-gradient(rgba(118, 216, 236, 0.025) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(118, 216, 236, 0.025) 1px, transparent 1px);
+      linear-gradient(rgba(118, 216, 236, 0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(118, 216, 236, 0.02) 1px, transparent 1px);
     background-size: 24px 24px;
   }
 
@@ -186,8 +307,8 @@
     inset-inline-start: 68px;
     inline-size: 2px;
     border-radius: 2px;
-    background: linear-gradient(180deg, var(--airspace-accent-strong), rgba(118, 216, 236, 0.22));
-    box-shadow: 0 0 10px rgba(118, 216, 236, 0.28);
+    background: linear-gradient(180deg, var(--airspace-accent-strong), rgba(118, 216, 236, 0.16));
+    box-shadow: 0 0 8px rgba(118, 216, 236, 0.2);
   }
 
   .pf2e-flying-visual-helper .airspace-tick {
@@ -196,14 +317,14 @@
     inset-inline-start: 58px;
     inline-size: 20px;
     block-size: 1px;
-    background: rgba(159, 226, 239, 0.35);
+    background: rgba(159, 226, 239, 0.26);
     transform: translateY(-50%);
   }
 
   .pf2e-flying-visual-helper .airspace-tick.major {
     inset-inline-start: 52px;
     inline-size: 32px;
-    background: rgba(213, 248, 255, 0.76);
+    background: rgba(213, 248, 255, 0.62);
   }
 
   .pf2e-flying-visual-helper .airspace-tick > span {
@@ -212,7 +333,7 @@
     inset-block-start: 50%;
     inline-size: 48px;
     color: var(--color-text-subtle, #bbb);
-    font-size: 0.65rem;
+    font-size: 0.6rem;
     text-align: end;
     transform: translateY(-50%);
   }
@@ -223,21 +344,21 @@
     inset-block-start: var(--airspace-y);
     inset-inline-start: calc(80px + (var(--airspace-lane) * 252px));
     display: grid;
-    grid-template-columns: 26px 64px minmax(0, 1fr);
+    grid-template-columns: 24px 60px minmax(0, 1fr);
     align-items: center;
-    gap: 0.35rem;
-    inline-size: 245px;
-    min-block-size: 30px;
+    gap: 4px;
+    inline-size: 225px;
+    min-block-size: 28px;
     margin: 0;
-    padding: 0.18rem 0.42rem;
-    border: 1px solid rgba(159, 226, 239, 0.3);
-    border-radius: 6px;
-    background: var(--airspace-surface);
+    padding: 2px 5px;
+    border: 1px solid rgba(159, 226, 239, 0.23);
+    border-radius: 5px;
+    background: rgba(11, 24, 34, 0.48);
     color: inherit;
     text-align: start;
     transform: translateY(-50%);
-    box-shadow: 0 2px 9px rgba(0, 0, 0, 0.36);
-    animation: airspace-node-fade 180ms ease-out;
+    box-shadow: 0 2px 7px rgba(0, 0, 0, 0.25);
+    animation: airspace-node-fade 150ms ease-out;
   }
 
   .pf2e-flying-visual-helper button.airspace-token-node::before {
@@ -248,73 +369,81 @@
     block-size: 1px;
     background: var(--airspace-accent);
     content: "";
-    opacity: 0.72;
+    opacity: 0.55;
   }
 
   .pf2e-flying-visual-helper button.airspace-token-node:hover,
   .pf2e-flying-visual-helper button.airspace-token-node:focus-visible {
     z-index: 50;
     border-color: var(--airspace-accent);
-    background: rgba(19, 43, 56, 0.92);
-    box-shadow: 0 0 0 1px rgba(118, 216, 236, 0.22), 0 4px 14px rgba(0, 0, 0, 0.5);
+    background: rgba(19, 43, 56, 0.78);
+    box-shadow: 0 0 0 1px rgba(118, 216, 236, 0.16), 0 4px 12px rgba(0, 0, 0, 0.35);
   }
 
-  .pf2e-flying-visual-helper .airspace-token-node img,
-  .pf2e-flying-visual-helper .airspace-compact-token img {
-    inline-size: 24px;
-    block-size: 24px;
-    border: 1px solid rgba(213, 248, 255, 0.35);
+  .pf2e-flying-visual-helper .airspace-token-node img {
+    inline-size: 21px;
+    block-size: 21px;
+    border: 1px solid rgba(213, 248, 255, 0.28);
     border-radius: 50%;
     object-fit: cover;
   }
 
   .pf2e-flying-visual-helper .airspace-node-height {
     color: var(--airspace-accent-strong);
-    font-size: 0.72rem;
+    font-size: 0.66rem;
     font-variant-numeric: tabular-nums;
     font-weight: 800;
   }
 
   .pf2e-flying-visual-helper .airspace-node-name {
     overflow: hidden;
-    font-size: 0.74rem;
+    font-size: 0.66rem;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .pf2e-flying-visual-helper .airspace-compact-list {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     align-content: start;
-    gap: 0.35rem;
-    flex: 1;
+    gap: 4px;
+    flex: 1 1 auto;
     min-block-size: 0;
     margin: 0;
-    padding: 0.65rem;
+    padding: 5px;
     overflow: auto;
-    overscroll-behavior-inline: contain;
+    overscroll-behavior: contain;
     list-style: none;
   }
 
   .pf2e-flying-visual-helper .airspace-compact-list > li {
-    flex: 0 0 14rem;
+    min-inline-size: 0;
     margin: 0;
   }
 
   .pf2e-flying-visual-helper button.airspace-compact-token {
-    position: relative;
     display: grid;
-    grid-template-columns: 28px 70px minmax(0, 1fr);
+    grid-template-columns: 20px 58px minmax(0, 1fr);
     align-items: center;
-    gap: 0.45rem;
+    gap: 4px;
     inline-size: 100%;
-    min-block-size: 36px;
+    min-block-size: 27px;
     margin: 0;
-    padding: 0.3rem 0.5rem;
-    border: 1px solid var(--airspace-border);
-    border-radius: 6px;
-    background: var(--airspace-surface-soft);
+    padding: 2px 4px;
+    border: 1px solid rgba(159, 226, 239, 0.18);
+    border-radius: 5px;
+    background: rgba(39, 64, 77, 0.2);
     color: inherit;
+    font-size: 0.64rem;
     text-align: start;
+  }
+
+  .pf2e-flying-visual-helper .airspace-compact-token img {
+    inline-size: 18px;
+    block-size: 18px;
+    border: 1px solid rgba(213, 248, 255, 0.25);
+    border-radius: 50%;
+    object-fit: cover;
   }
 
   .pf2e-flying-visual-helper .airspace-compact-token > strong {
@@ -322,18 +451,24 @@
     font-variant-numeric: tabular-nums;
   }
 
+  .pf2e-flying-visual-helper .airspace-compact-token > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .pf2e-flying-visual-helper .airspace-empty {
-    display: grid;
+    display: flex;
     place-content: center;
-    flex: 1;
-    gap: 0.5rem;
+    align-items: center;
+    flex: 1 1 auto;
+    gap: 6px;
     color: var(--color-text-subtle, #aaa);
-    text-align: center;
+    font-size: 0.68rem;
   }
 
   .pf2e-flying-visual-helper .airspace-empty i {
     color: var(--airspace-accent);
-    font-size: 1.7rem;
   }
 
   .pf2e-flying-visual-helper .airspace-empty p {
@@ -352,64 +487,48 @@
   }
 
   .pf2e-flying-visual-helper button:focus-visible {
-    outline: 2px solid var(--airspace-accent);
-    outline-offset: 2px;
+    outline: 1px solid var(--airspace-accent);
+    outline-offset: 1px;
   }
 
-  @media (max-width: 720px) {
-    .pf2e-flying-visual-helper.airspace-hud {
-      max-inline-size: calc(100vw - 0.5rem);
-    }
-
-    .pf2e-flying-visual-helper .airspace-toolbar {
-      display: grid;
-      gap: 0.3rem;
-      padding: 0.3rem 0.45rem;
-    }
-
-    .pf2e-flying-visual-helper .airspace-filters {
-      inline-size: 100%;
-    }
-
-    .pf2e-flying-visual-helper button.airspace-filter {
-      flex: 1;
-      min-inline-size: 0;
+  @media (max-width: 420px) {
+    .pf2e-flying-visual-helper .airspace-compact-list {
+      grid-template-columns: 1fr;
     }
 
     .pf2e-flying-visual-helper .airspace-relations {
       grid-template-columns: 1fr;
-      gap: 0.25rem;
-      max-block-size: 5.5rem;
-      overflow: auto;
+      gap: 2px;
+      max-block-size: 58px;
     }
 
     .pf2e-flying-visual-helper .airspace-relations-heading {
       flex-direction: row;
       justify-content: space-between;
-      inline-size: 100%;
+      max-inline-size: none;
     }
   }
 
   @media (prefers-contrast: more) {
     .pf2e-flying-visual-helper {
-      --airspace-surface: rgba(11, 24, 34, 0.94);
-      --airspace-surface-soft: rgba(39, 64, 77, 0.84);
-      --airspace-border: rgba(213, 248, 255, 0.72);
+      --airspace-border: rgba(213, 248, 255, 0.7);
+      --airspace-detail-surface: rgba(6, 16, 24, 0.9);
     }
 
-    .pf2e-flying-visual-helper.airspace-hud .window-header,
-    .pf2e-flying-visual-helper .airspace-panel {
-      background: rgba(8, 18, 27, 0.94);
+    .pf2e-flying-visual-helper .airspace-microbar {
+      border-color: var(--airspace-border);
+      background: rgba(8, 18, 27, 0.88);
+      opacity: 1;
     }
   }
 
   @media (forced-colors: active) {
-    .pf2e-flying-visual-helper.airspace-hud,
-    .pf2e-flying-visual-helper.airspace-hud .window-header,
-    .pf2e-flying-visual-helper .airspace-panel {
+    .pf2e-flying-visual-helper .airspace-microbar,
+    .pf2e-flying-visual-helper .airspace-details {
       border-color: CanvasText;
       background: Canvas;
       color: CanvasText;
+      opacity: 1;
       box-shadow: none;
     }
   }

@@ -2,11 +2,11 @@
   "PF2E_FLYING_VISUAL_HELPER.Settings.enabled.name": "启用飞行视觉辅助",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enabled.hint": "启用纯客户端 PF2e 空域视觉与战术 HUD。",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableAltitudeHud.name": "启用高度 HUD",
-  "PF2E_FLYING_VISUAL_HELPER.Settings.enableAltitudeHud.hint": "使用 ApplicationV2 浮动面板显示当前场景中玩家可见 Token 的高度关系。",
+  "PF2E_FLYING_VISUAL_HELPER.Settings.enableAltitudeHud.hint": "使用极简 ApplicationV2 空域导航 HUD 显示当前场景中玩家可见 Token 的高度关系。",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableGroundProjection.name": "启用地面投影",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableGroundProjection.hint": "沿飞行姿态绘制不参与交互的虚线，并在 Foundry 计算的 Token footprint 中心标出地面锚点。",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableHeightAxis.name": "启用高度轴",
-  "PF2E_FLYING_VISUAL_HELPER.Settings.enableHeightAxis.hint": "在高度 HUD 中使用线性比例、可滚动的高度轴；关闭后改为紧凑列表。",
+  "PF2E_FLYING_VISUAL_HELPER.Settings.enableHeightAxis.hint": "主动展开 HUD 详情后使用线性比例、可滚动的高度轴；关闭后改为紧凑 Token 列表。无论选择哪种模式，360 × 32 导航条都保持极简。",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableHeightLabel.name": "启用高度标签",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableHeightLabel.hint": "使用随抬升模型移动的 Foundry VTT 原生 Token 高度标签；关闭后隐藏该标签。",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableStand.name": "启用透明支架",
@@ -36,5 +36,12 @@
   "PF2E_FLYING_VISUAL_HELPER.Hud.relation.same": "高度相同",
   "PF2E_FLYING_VISUAL_HELPER.Hud.noNearbyAir": "视觉半径 {radius} 格内没有玩家可见的空中 Token。",
   "PF2E_FLYING_VISUAL_HELPER.Hud.empty": "没有玩家可见的 Token 符合当前过滤条件。",
-  "PF2E_FLYING_VISUAL_HELPER.Hud.controlButton": "打开 PF2e 空域 HUD"
+  "PF2E_FLYING_VISUAL_HELPER.Hud.controlButton": "打开 PF2e 空域 HUD",
+  "PF2E_FLYING_VISUAL_HELPER.Hud.dragHandle": "拖动空域 HUD",
+  "PF2E_FLYING_VISUAL_HELPER.Hud.expandDetails": "展开空域详情",
+  "PF2E_FLYING_VISUAL_HELPER.Hud.collapseDetails": "收起空域详情",
+  "PF2E_FLYING_VISUAL_HELPER.Hud.close": "关闭空域 HUD",
+  "PF2E_FLYING_VISUAL_HELPER.Hud.summary.selected": "已选 {name} · {elevation} · 共 {count} 个可见单位",
+  "PF2E_FLYING_VISUAL_HELPER.Hud.summary.count": "{count} 个可见单位 · 最高 {elevation}",
+  "PF2E_FLYING_VISUAL_HELPER.Hud.summary.empty": "没有玩家可见的 Token"
 }

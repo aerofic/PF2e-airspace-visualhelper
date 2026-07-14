@@ -16,9 +16,16 @@ import { normalizeHudElevation } from "./visual-math.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
-/** Default to a compact top strip while keeping the Application freely movable. */
+/** Default to a tiny navigation-style status bar centered near the Canvas top. */
 export const ALTITUDE_HUD_DEFAULT_POSITION = Object.freeze({
-  width: 860,
+  width: 360,
+  height: 32,
+  top: 52
+});
+
+/** The proportional axis and Token details are created only on demand. */
+export const ALTITUDE_HUD_EXPANDED_POSITION = Object.freeze({
+  width: 520,
   height: 260,
   top: 52
 });
@@ -29,15 +36,18 @@ export class AltitudeHud extends HandlebarsApplicationMixin(ApplicationV2) {
     id: "pf2e-flying-visual-helper-airspace",
     classes: ["pf2e-flying-visual-helper", "airspace-hud"],
     window: {
+      frame: false,
+      positioned: true,
       title: "PF2E_FLYING_VISUAL_HELPER.Hud.title",
-      icon: "fa-solid fa-layer-group",
-      resizable: true,
-      minimizable: true
+      resizable: false,
+      minimizable: false
     },
     // Omitting left lets ApplicationV2 center the HUD horizontally on its
     // first render. Its stored position remains user-draggable thereafter.
     position: { ...ALTITUDE_HUD_DEFAULT_POSITION },
     actions: {
+      toggleDetails: AltitudeHud.#onToggleDetails,
+      closeHud: AltitudeHud.#onCloseHud,
       setFilter: AltitudeHud.#onSetFilter,
       focusToken: AltitudeHud.#onFocusToken
     }
@@ -51,8 +61,10 @@ export class AltitudeHud extends HandlebarsApplicationMixin(ApplicationV2) {
   };
 
   #filter = HUD_FILTERS.ALL;
+  #expanded = false;
   #selectedTokenId = null;
   #refreshTimer = null;
+  #listenerAbortController = null;
 
   async _prepareContext(options) {
     const context = await super._prepareContext(options);
@@ -60,37 +72,57 @@ export class AltitudeHud extends HandlebarsApplicationMixin(ApplicationV2) {
     const unit = getSceneDistanceUnit();
     const allEntries = collectVisibleTokenEntries({ unit });
     const filteredEntries = sortAltitudeEntries(filterAltitudeEntries(allEntries, this.#filter));
-    const axis = buildAltitudeAxis(filteredEntries);
-
     const selected = resolveSelectedEntry(allEntries, this.#selectedTokenId);
-    const relations = buildAltitudeRelations(selected, allEntries, {
-      gridSize: canvas.grid?.size ?? canvas.dimensions?.size ?? 100,
-      radiusSpaces: NEARBY_RADIUS_GRID_SPACES
-    }).map(relation => ({
-      ...relation,
-      relationText: formatRelation(relation, unit),
-      relationActionLabel: `${relation.name}, ${formatRelation(relation, unit)}, ${relation.accessibleLabel}`
-    }));
+    const relations = this.#expanded
+      ? buildAltitudeRelations(selected, allEntries, {
+        gridSize: canvas.grid?.size ?? canvas.dimensions?.size ?? 100,
+        radiusSpaces: NEARBY_RADIUS_GRID_SPACES
+      }).map(relation => ({
+        ...relation,
+        relationText: formatRelation(relation, unit),
+        relationActionLabel: `${relation.name}, ${formatRelation(relation, unit)}, ${relation.accessibleLabel}`
+      }))
+      : [];
 
+    // The proportional axis can be several hundred DOM nodes in pathological
+    // Scenes. Do not even calculate it while the 32 px navigation bar is shut.
+    const showHeightAxis = this.#expanded && settings.enableHeightAxis;
+    const axis = showHeightAxis ? buildAltitudeAxis(filteredEntries) : null;
+
+    const filterIcons = {
+      [HUD_FILTERS.ALL]: "fa-layer-group",
+      [HUD_FILTERS.GROUND]: "fa-arrow-down",
+      [HUD_FILTERS.AIR]: "fa-arrow-up"
+    };
     const filters = Object.values(HUD_FILTERS).map(filter => ({
       id: filter,
       active: filter === this.#filter,
-      label: game.i18n.localize(`PF2E_FLYING_VISUAL_HELPER.Hud.filter.${filter}`)
+      label: game.i18n.localize(`PF2E_FLYING_VISUAL_HELPER.Hud.filter.${filter}`),
+      icon: filterIcons[filter]
     }));
+    const summarySelected = filteredEntries.find(entry => entry.id === selected?.id) ?? null;
+    const summary = buildHudSummary({ selected: summarySelected, entries: filteredEntries, unit });
 
     return {
       ...context,
       filters,
-      enableHeightAxis: settings.enableHeightAxis,
+      isExpanded: this.#expanded,
+      showHeightAxis,
       hasTokens: filteredEntries.length > 0,
       entries: filteredEntries,
-      axis: {
+      axis: axis ? {
         ...axis,
         ticks: axis.ticks.map(tick => ({
           ...tick,
           label: tick.major ? `${formatFeet(tick.elevation)} ${unit}` : ""
         }))
-      },
+      } : null,
+      summaryLabel: summary.label,
+      summaryAccessibleLabel: summary.accessibleLabel,
+      summaryTooltipText: summary.tooltipText,
+      toggleDetailsLabel: game.i18n.localize(this.#expanded
+        ? "PF2E_FLYING_VISUAL_HELPER.Hud.collapseDetails"
+        : "PF2E_FLYING_VISUAL_HELPER.Hud.expandDetails"),
       selected: selected ? {
         ...selected,
         elevationLabel: `${formatFeet(selected.elevation)} ${unit}`
@@ -105,11 +137,27 @@ export class AltitudeHud extends HandlebarsApplicationMixin(ApplicationV2) {
 
   _onRender(context, options) {
     super._onRender(context, options);
+    this.#listenerAbortController?.abort();
+    this.#listenerAbortController = new AbortController();
+    const { signal } = this.#listenerAbortController;
+    const dragHandle = this.parts.main?.querySelector(".airspace-drag-handle");
+    if (dragHandle) activateHudDragging(dragHandle, this, { signal });
     const viewport = this.parts.main?.querySelector(".airspace-axis-scroll");
-    if (viewport) activateDragScrolling(viewport);
+    if (viewport) activateDragScrolling(viewport, { signal });
+  }
+
+  _preClose(options) {
+    // Re-opening must always return to the unobtrusive navigation bar. Resize
+    // while the element still exists because ApplicationV2 removes it before
+    // _onClose runs.
+    this.#expanded = false;
+    this.#setModePosition(ALTITUDE_HUD_DEFAULT_POSITION);
+    return super._preClose(options);
   }
 
   _onClose(options) {
+    this.#listenerAbortController?.abort();
+    this.#listenerAbortController = null;
     if (this.#refreshTimer !== null) clearTimeout(this.#refreshTimer);
     this.#refreshTimer = null;
     super._onClose(options);
@@ -117,6 +165,7 @@ export class AltitudeHud extends HandlebarsApplicationMixin(ApplicationV2) {
 
   async toggle() {
     if (this.rendered) return this.close();
+    this.#expanded = false;
     return this.render({ force: true });
   }
 
@@ -143,12 +192,47 @@ export class AltitudeHud extends HandlebarsApplicationMixin(ApplicationV2) {
     this.requestRefresh();
   }
 
-  static #onSetFilter(event, target) {
+  #setModePosition(modePosition) {
+    const currentWidth = Number(this.position?.width);
+    const currentLeft = Number(this.position?.left);
+    const nextPosition = {
+      width: modePosition.width,
+      height: modePosition.height
+    };
+    // Expand around the current horizontal center instead of jumping away
+    // from a location chosen by the user.
+    if (Number.isFinite(currentWidth) && Number.isFinite(currentLeft)) {
+      nextPosition.left = currentLeft + ((currentWidth - modePosition.width) / 2);
+    }
+    this.setPosition(nextPosition);
+  }
+
+  static async #onToggleDetails(event) {
+    event.preventDefault();
+    this.#expanded = !this.#expanded;
+    this.#setModePosition(this.#expanded
+      ? ALTITUDE_HUD_EXPANDED_POSITION
+      : ALTITUDE_HUD_DEFAULT_POSITION);
+    await this.render({ parts: ["main"] });
+    this.parts?.main
+      ?.querySelector("#pf2e-fvh-airspace-summary")
+      ?.focus({ preventScroll: true });
+  }
+
+  static #onCloseHud(event) {
+    event.preventDefault();
+    return this.close();
+  }
+
+  static async #onSetFilter(event, target) {
     event.preventDefault();
     const filter = target.dataset.filter;
     if (!Object.values(HUD_FILTERS).includes(filter) || (filter === this.#filter)) return;
     this.#filter = filter;
-    void this.render({ parts: ["main"] });
+    await this.render({ parts: ["main"] });
+    this.parts?.main
+      ?.querySelector(`[data-action="setFilter"][data-filter="${filter}"]`)
+      ?.focus({ preventScroll: true });
   }
 
   static async #onFocusToken(event, target) {
@@ -292,6 +376,29 @@ function formatRelation(relation, unit) {
   });
 }
 
+function buildHudSummary({ selected, entries, unit }) {
+  const count = entries.length;
+  if (count === 0) {
+    const label = game.i18n.localize("PF2E_FLYING_VISUAL_HELPER.Hud.summary.empty");
+    return { label, accessibleLabel: label, tooltipText: label };
+  }
+
+  const maximum = `${formatFeet(entries[0].elevation)} ${unit}`;
+  const key = selected
+    ? "PF2E_FLYING_VISUAL_HELPER.Hud.summary.selected"
+    : "PF2E_FLYING_VISUAL_HELPER.Hud.summary.count";
+  const label = game.i18n.format(key, {
+    name: selected?.name ?? "",
+    elevation: selected ? `${formatFeet(selected.elevation)} ${unit}` : maximum,
+    count
+  });
+  return {
+    label,
+    accessibleLabel: `${game.i18n.localize("PF2E_FLYING_VISUAL_HELPER.Hud.title")}. ${label}`,
+    tooltipText: entries.map(entry => entry.accessibleLabel).join(" • ")
+  };
+}
+
 function getSceneDistanceUnit() {
   return String(canvas.grid?.units ?? canvas.scene?.grid?.units ?? "ft").trim() || "ft";
 }
@@ -302,7 +409,7 @@ function getPf2eFeetUnit() {
   return localized === key ? "ft" : localized;
 }
 
-function activateDragScrolling(viewport) {
+function activateDragScrolling(viewport, { signal } = {}) {
   let dragging = false;
   let pointerId = null;
   let originX = 0;
@@ -320,13 +427,13 @@ function activateDragScrolling(viewport) {
     originScrollTop = viewport.scrollTop;
     viewport.setPointerCapture(pointerId);
     viewport.classList.add("is-dragging");
-  });
+  }, { signal });
 
   viewport.addEventListener("pointermove", event => {
     if (!dragging || (event.pointerId !== pointerId)) return;
     viewport.scrollLeft = originScrollLeft - (event.clientX - originX);
     viewport.scrollTop = originScrollTop - (event.clientY - originY);
-  });
+  }, { signal });
 
   const stopDragging = event => {
     if (!dragging || (event.pointerId !== pointerId)) return;
@@ -335,6 +442,61 @@ function activateDragScrolling(viewport) {
     pointerId = null;
     viewport.classList.remove("is-dragging");
   };
-  viewport.addEventListener("pointerup", stopDragging);
-  viewport.addEventListener("pointercancel", stopDragging);
+  viewport.addEventListener("pointerup", stopDragging, { signal });
+  viewport.addEventListener("pointercancel", stopDragging, { signal });
+}
+
+/** Pointer-captured drag and keyboard movement for the frameless HUD. */
+function activateHudDragging(handle, application, { signal } = {}) {
+  let pointerId = null;
+  let originX = 0;
+  let originY = 0;
+  let originLeft = 0;
+  let originTop = 0;
+
+  handle.addEventListener("pointerdown", event => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    pointerId = event.pointerId;
+    originX = event.clientX;
+    originY = event.clientY;
+    originLeft = Number(application.position?.left) || 0;
+    originTop = Number(application.position?.top) || 0;
+    handle.setPointerCapture(pointerId);
+    handle.classList.add("is-dragging");
+  }, { signal });
+
+  handle.addEventListener("pointermove", event => {
+    if (event.pointerId !== pointerId) return;
+    application.setPosition({
+      left: originLeft + (event.clientX - originX),
+      top: originTop + (event.clientY - originY)
+    });
+  }, { signal });
+
+  const stopDragging = event => {
+    if (event.pointerId !== pointerId) return;
+    if (handle.hasPointerCapture(pointerId)) handle.releasePointerCapture(pointerId);
+    pointerId = null;
+    handle.classList.remove("is-dragging");
+  };
+  handle.addEventListener("pointerup", stopDragging, { signal });
+  handle.addEventListener("pointercancel", stopDragging, { signal });
+
+  handle.addEventListener("keydown", event => {
+    const directions = {
+      ArrowLeft: [-1, 0],
+      ArrowRight: [1, 0],
+      ArrowUp: [0, -1],
+      ArrowDown: [0, 1]
+    };
+    const direction = directions[event.key];
+    if (!direction) return;
+    event.preventDefault();
+    const step = event.shiftKey ? 1 : 10;
+    application.setPosition({
+      left: (Number(application.position?.left) || 0) + (direction[0] * step),
+      top: (Number(application.position?.top) || 0) + (direction[1] * step)
+    });
+  }, { signal });
 }

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.1 — Ultra-Compact Navigation HUD
+
+- Replaced the always-open top panel with a frameless, highly translucent `360 × 32` navigation-style summary bar.
+- Condensed ALL, GROUND, and AIR filtering into accessible icon controls with localized tooltips and labels.
+- Added a compact live summary for the selected Token, visible Token count, and highest matching elevation.
+- Moved the proportional altitude axis, nearby relations, hover details, and Token focus interactions behind an explicit expand control so the full tactical view remains available on demand.
+- Added a dedicated drag handle and localized expand, collapse, close, and summary accessibility text.
+
 ## 0.3.0 — Ground-Anchored Flight Stand
 
 - Reversed the flight illusion: the acrylic base now stays at the TokenDocument footprint while the Token mesh rises up-left.
