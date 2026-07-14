@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.3 — Click-to-Open Airspace HUD
+
+- Removed every automatic HUD-open path from world readiness, Canvas readiness, Scene changes, and runtime setting changes.
+- Made a newly viewed Scene always start with the Airspace HUD closed; the Token-control button is now the only opening path.
+- Kept availability reconciliation limited to refreshing an already user-opened HUD or closing it when the module/HUD setting becomes unavailable.
+- Added isolated lifecycle regression tests proving that valid settings never create a window and Scene changes close any carried HUD state.
+
 ## 0.4.2 — Untouched Native Elevation Labels
 
 - Removed all writes to Foundry/PF2e native elevation tooltip and Level-indicator positions; they now remain exactly where core places them instead of following lifted Token artwork.

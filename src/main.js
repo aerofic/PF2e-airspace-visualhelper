@@ -1,6 +1,7 @@
 import { AltitudeHud } from "./altitude-hud.js";
 import { MODULE_ID, SETTINGS, SYSTEM_ID } from "./constants.js";
 import { FlyingVisualLayer } from "./flying-visual-layer.js";
+import { reconcileHudAvailability, resetHudForScene } from "./hud-lifecycle.js";
 import { readSettings, registerSettings } from "./settings.js";
 
 const flyingVisualLayer = new FlyingVisualLayer();
@@ -20,13 +21,15 @@ Hooks.once("ready", () => {
 
   moduleReady = true;
   if (canvas.ready) flyingVisualLayer.activate(canvas);
-  void syncHudVisibility({ autoOpen: true });
+  void syncHudVisibility();
 });
 
 Hooks.on("canvasReady", readyCanvas => {
   if (game.system.id !== SYSTEM_ID) return;
   flyingVisualLayer.activate(readyCanvas);
-  if (game.ready) void syncHudVisibility({ autoOpen: true });
+  // A newly viewed Scene always starts without the HUD. Only the explicit
+  // Token-control button may open it for this Canvas.
+  void resetHudForScene(altitudeHud);
 });
 
 Hooks.on("canvasTearDown", tearingDownCanvas => {
@@ -122,26 +125,21 @@ function onSettingChange(key, _value) {
   flyingVisualLayer.refreshSettings();
 
   if ((key === SETTINGS.ENABLED) || (key === SETTINGS.ENABLE_ALTITUDE_HUD)) {
-    void syncHudVisibility({ autoOpen: true });
+    void syncHudVisibility();
     void ui.controls?.render({ reset: true });
     return;
   }
   altitudeHud.requestRefresh({ immediate: key === SETTINGS.ENABLE_HEIGHT_AXIS });
 }
 
-async function syncHudVisibility({ autoOpen = false } = {}) {
+async function syncHudVisibility() {
   const settings = readSettings();
-  const shouldShow = moduleReady
-    && canvas.ready
-    && settings.enabled
-    && settings.enableAltitudeHud;
-  if (!shouldShow) {
-    if (altitudeHud.rendered) await altitudeHud.close({ animate: false });
-    return;
-  }
-
-  if (altitudeHud.rendered) altitudeHud.requestRefresh({ immediate: true });
-  else if (autoOpen) await altitudeHud.render({ force: true });
+  await reconcileHudAvailability(altitudeHud, {
+    moduleReady,
+    canvasReady: canvas.ready,
+    enabled: settings.enabled,
+    enableAltitudeHud: settings.enableAltitudeHud
+  });
 }
 
 function tokenChangesAffectHud(changes) {

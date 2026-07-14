@@ -2,7 +2,7 @@
   "PF2E_FLYING_VISUAL_HELPER.Settings.enabled.name": "Enable Flying Visual Helper",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enabled.hint": "Enable the client-side PF2e airspace visuals and tactical HUD.",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableAltitudeHud.name": "Enable Altitude HUD",
-  "PF2E_FLYING_VISUAL_HELPER.Settings.enableAltitudeHud.hint": "Show the ultra-compact ApplicationV2 airspace navigation HUD for visible Tokens in the current Scene.",
+  "PF2E_FLYING_VISUAL_HELPER.Settings.enableAltitudeHud.hint": "Make the ultra-compact ApplicationV2 airspace HUD available from Token controls. It remains closed until clicked and closes on every Scene change.",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableGroundProjection.name": "Enable Ground Projection",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableGroundProjection.hint": "Mark Foundry's actual Token footprint with a non-interactive ground cue and a restrained projection guide.",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableHeightAxis.name": "Enable Height Axis",
