@@ -1,18 +1,23 @@
+const SHADOW_COLOR = 0x11171a;
+
 /** Soft projected shadow renderer; avoids one BlurFilter allocation per Token. */
 export class ShadowRenderer {
   constructor(graphics) {
     this.graphics = graphics;
     graphics.eventMode = "none";
-    graphics.blendMode = PIXI.BLEND_MODES.MULTIPLY;
+    graphics.blendMode = globalThis.PIXI?.BLEND_MODES?.MULTIPLY ?? graphics.blendMode ?? 0;
     graphics.zIndex = 0;
   }
 
   render(metrics, enabled) {
     const graphics = this.graphics;
     graphics.clear();
-    graphics.visible = metrics.flying
+    const shadow = metrics.shadow;
+    graphics.visible = Boolean(
+      metrics.flying
       && enabled
-      && ((metrics.shadow.alpha > 0) || (metrics.shadow.contactAlpha > 0));
+      && ((shadow.alpha > 0) || (shadow.contactAlpha > 0) || (shadow.contactCoreAlpha > 0))
+    );
     if (!graphics.visible) return;
 
     const {
@@ -26,20 +31,40 @@ export class ShadowRenderer {
       contactRadiusX,
       contactRadiusY,
       contactAlpha
-    } = metrics.shadow;
-    graphics.beginFill(0x000000, alpha * 0.3)
+    } = shadow;
+
+    // Three offset ellipses approximate a soft penumbra. Their low individual
+    // weights remain readable when multiplied together without becoming a
+    // single opaque black patch.
+    graphics.beginFill(SHADOW_COLOR, alpha * 0.16)
       .drawEllipse(x, y, radiusX * 1.24, radiusY * 1.34)
       .endFill();
-    graphics.beginFill(0x000000, alpha * 0.62)
-      .drawEllipse(x, y, radiusX * 1.08, radiusY * 1.14)
+    graphics.beginFill(SHADOW_COLOR, alpha * 0.27)
+      .drawEllipse(x, y, radiusX * 1.07, radiusY * 1.12)
       .endFill();
-    graphics.beginFill(0x000000, alpha * 0.92)
-      .drawEllipse(x, y, radiusX * 0.88, radiusY * 0.88)
+    graphics.beginFill(SHADOW_COLOR, alpha * 0.39)
+      .drawEllipse(x, y, radiusX * 0.84, radiusY * 0.84)
       .endFill();
-    // A compact contact shadow keeps the original grid footprint legible even
-    // when the softer height shadow drifts with the simulated light direction.
-    graphics.beginFill(0x000000, contactAlpha)
-      .drawEllipse(contactX, contactY, contactRadiusX, contactRadiusY)
+
+    // The outer contact shadow marks the exact ground footprint. A tighter
+    // core supplies physical weight at the acrylic plate without using a
+    // per-Token blur filter.
+    graphics.beginFill(SHADOW_COLOR, contactAlpha * 0.62)
+      .drawEllipse(contactX, contactY, contactRadiusX * 1.12, contactRadiusY * 1.16)
       .endFill();
+    graphics.beginFill(
+      SHADOW_COLOR,
+      finiteOr(shadow.contactCoreAlpha, contactAlpha * 0.94)
+    ).drawEllipse(
+      contactX,
+      contactY,
+      finiteOr(shadow.contactCoreRadiusX, contactRadiusX * 0.54),
+      finiteOr(shadow.contactCoreRadiusY, contactRadiusY * 0.62)
+    ).endFill();
   }
+}
+
+function finiteOr(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
 }

@@ -1,8 +1,8 @@
 {
   "id": "pf2e-flying-visual-helper",
   "title": "PF2e Flying Visual Helper",
-  "description": "An ultra-compact PF2e airspace navigation HUD and ground-anchored acrylic flight-stand visual system for Foundry VTT v14.",
-  "version": "0.3.1",
+  "description": "An ultra-compact PF2e airspace HUD with layered acrylic flight stands, height-aware shadows, native elevation labels, and reversible airborne presentation for Foundry VTT v14.",
+  "version": "0.4.0",
   "compatibility": {
     "minimum": "14.360",
     "verified": "14.363"

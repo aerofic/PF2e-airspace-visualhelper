@@ -13,38 +13,63 @@ import { normalizeFlyingElevation } from "./visual-math.js";
 export class FlyingVisualLayer {
   #canvas = null;
   #visuals = new Map();
-  #animating = new Set();
+  // A single shared ticker drives both fallback elevation tweens and the
+  // inexpensive idle drift of visible airborne Tokens. Individual visuals
+  // never register their own PIXI ticker callbacks.
+  #ticking = new Set();
   #ticker = null;
   #tickerActive = false;
   #settings = null;
   #sceneId = null;
+  #motionQuery = null;
+
+  #onMotionPreferenceChange = event => {
+    const reduced = !!(event?.matches ?? this.#motionQuery?.matches);
+    for (const visual of this.#visuals.values()) {
+      visual.setReducedMotion(reduced);
+      if (visual.canRetire) this.#removeVisual(visual.token);
+      else this.#syncTicker(visual);
+    }
+    if (this.#ticking.size === 0) this.#stopTicker();
+  };
 
   #onTick = () => {
     const now = performance.now();
-    for (const visual of this.#animating) {
+    // Deleting the current Set entry during iteration is defined and safe;
+    // avoid allocating a snapshot array on every ambient frame.
+    for (const visual of this.#ticking) {
       if (!visual.tick(now)) {
-        this.#animating.delete(visual);
+        this.#ticking.delete(visual);
         if (visual.canRetire) this.#removeVisual(visual.token);
       }
     }
-    if (this.#animating.size === 0) this.#stopTicker();
+    if (this.#ticking.size === 0) this.#stopTicker();
   };
 
   activate(readyCanvas) {
     if (!readyCanvas?.ready || !readyCanvas.scene) return;
-    if ((this.#canvas === readyCanvas) && (this.#sceneId === readyCanvas.scene.id) && this.#settings) return;
+    if ((this.#canvas === readyCanvas) && (this.#sceneId === readyCanvas.scene.id) && this.#settings) {
+      this.#syncAllTickers();
+      return;
+    }
     if (this.#canvas && (this.#canvas !== readyCanvas)) this.deactivate(this.#canvas);
     this.#canvas = readyCanvas;
     this.#sceneId = readyCanvas.scene.id;
     this.#settings = readSettings();
     this.#clearVisuals();
-    if (!this.#settings.enabled) return;
+    if (!this.#settings.enabled) {
+      this.#disconnectMotionPreference();
+      return;
+    }
+    this.#connectMotionPreference();
     for (const token of readyCanvas.tokens?.placeables ?? []) this.#ensureVisual(token, { ifFlying: true });
+    this.#syncAllTickers();
   }
 
   deactivate(tearingDownCanvas) {
     if (this.#canvas && tearingDownCanvas && (tearingDownCanvas !== this.#canvas)) return;
     this.#clearVisuals();
+    this.#disconnectMotionPreference();
     this.#canvas = null;
     this.#settings = null;
     this.#sceneId = null;
@@ -56,14 +81,25 @@ export class FlyingVisualLayer {
     this.#canvas ??= canvas;
     if (!this.#settings.enabled) {
       this.#clearVisuals();
+      this.#disconnectMotionPreference();
       return;
     }
+    this.#connectMotionPreference();
 
-    for (const visual of this.#visuals.values()) visual.updateSettings(this.#settings);
+    const updated = new Set();
+    for (const visual of this.#visuals.values()) {
+      visual.updateSettings(this.#settings);
+      this.#syncTicker(visual);
+      updated.add(visual);
+    }
     for (const token of canvas.tokens?.placeables ?? []) {
       const visual = this.#ensureVisual(token, { ifFlying: true });
-      visual?.updateSettings(this.#settings);
+      if (visual && !updated.has(visual)) {
+        visual.updateSettings(this.#settings);
+        this.#syncTicker(visual);
+      }
     }
+    this.#syncAllTickers();
   }
 
   refreshAll() {
@@ -71,6 +107,7 @@ export class FlyingVisualLayer {
     for (const token of this.#canvas.tokens?.placeables ?? []) {
       const visual = this.#ensureVisual(token, { ifFlying: true });
       visual?.updateSettings(this.#settings);
+      this.#syncTicker(visual);
     }
   }
 
@@ -78,6 +115,7 @@ export class FlyingVisualLayer {
     if (!this.#isCurrentToken(token) || !this.#settings?.enabled) return;
     const visual = this.#ensureVisual(token, { ifFlying: true });
     visual?.onDraw();
+    this.#syncTicker(visual);
   }
 
   onRefreshToken(token, flags = {}) {
@@ -88,14 +126,19 @@ export class FlyingVisualLayer {
     if (flags.refreshElevation
       && (visual.followingCoreAnimation || token.isPreview || !visual.isAnimating)) {
       const coreAnimationActive = hasCoreElevationAnimation(token);
-      this.#animating.delete(visual);
-      visual.syncCoreElevation(token.document.elevation, { active: coreAnimationActive });
+      this.#ticking.delete(visual);
+      // Consume Foundry's authoritative position/size/state bases before the
+      // interpolated elevation render reapplies this module's pose. Reversing
+      // these calls would make same-frame refresh flags capture our own write.
       visual.onRefresh(flags);
+      visual.syncCoreElevation(token.document.elevation, { active: coreAnimationActive });
       if (visual.canRetire) this.#removeVisual(token);
-      if (this.#animating.size === 0) this.#stopTicker();
+      else this.#syncTicker(visual, { suspended: coreAnimationActive });
+      if (this.#ticking.size === 0) this.#stopTicker();
       return;
     }
     visual.onRefresh(flags);
+    this.#syncTicker(visual);
   }
 
   onDestroyToken(token) {
@@ -119,6 +162,9 @@ export class FlyingVisualLayer {
       else this.#animateVisual(visual, changes.elevation, { animate: options?.animate !== false });
     } else if (["width", "height", "shape", "texture"].some(key => key in changes)) {
       visual.render();
+      this.#syncTicker(visual);
+    } else {
+      this.#syncTicker(visual);
     }
     // x/y movement only updates the ground container and reapplies the cached
     // mesh offset in refreshToken; geometry is not recalculated.
@@ -142,26 +188,33 @@ export class FlyingVisualLayer {
 
   #animateVisual(visual, elevation, { animate = true } = {}) {
     const target = normalizeFlyingElevation(elevation);
-    if (visual.setElevation(target, { animate })) {
-      this.#animating.add(visual);
-      this.#startTicker();
-    } else if (visual.canRetire) {
+    visual.setElevation(target, { animate });
+    if (visual.canRetire) {
       this.#removeVisual(visual.token);
+    } else {
+      // Immediate updates may still require ambient motion even though they
+      // did not create an elevation tween.
+      this.#syncTicker(visual);
     }
   }
 
   #followCoreAnimation(visual, elevation) {
-    this.#animating.delete(visual);
+    this.#ticking.delete(visual);
     visual.beginCoreAnimation(elevation);
-    if (this.#animating.size === 0) this.#stopTicker();
+    // Foundry supplies every intermediate elevation frame while its own core
+    // animation is active; registering our ticker would duplicate that work.
+    this.#syncTicker(visual, { suspended: true });
   }
 
   #ensureVisual(token, { ifFlying = false, initialElevation } = {}) {
     if (!this.#isCurrentToken(token) || token.destroyed) return null;
     const existing = this.#visuals.get(token);
-    if (existing && !existing.destroyed) return existing;
+    if (existing && !existing.destroyed) {
+      this.#syncTicker(existing);
+      return existing;
+    }
     if (existing) {
-      this.#animating.delete(existing);
+      this.#ticking.delete(existing);
       existing.destroy();
       this.#visuals.delete(token);
     }
@@ -170,17 +223,19 @@ export class FlyingVisualLayer {
       initialElevation,
       parent: this.#canvas.primary ?? token
     });
+    visual.setReducedMotion(!!this.#motionQuery?.matches);
     this.#visuals.set(token, visual);
+    this.#syncTicker(visual);
     return visual;
   }
 
   #removeVisual(token) {
     const visual = this.#visuals.get(token);
     if (!visual) return;
-    this.#animating.delete(visual);
+    this.#ticking.delete(visual);
     visual.destroy();
     this.#visuals.delete(token);
-    if (this.#animating.size === 0) this.#stopTicker();
+    if (this.#ticking.size === 0) this.#stopTicker();
   }
 
   #isCurrentToken(token) {
@@ -193,10 +248,58 @@ export class FlyingVisualLayer {
     return !!this.#canvas?.ready && (document?.parent === this.#canvas.scene);
   }
 
+  /**
+   * Reconcile one visual with the shared ticker after any lifecycle, settings,
+   * elevation, visibility, or refresh-state change.
+   */
+  #syncTicker(visual, { suspended = false } = {}) {
+    if (!visual || visual.destroyed || suspended || !visual.requiresTicker) {
+      if (visual) this.#ticking.delete(visual);
+      if (this.#ticking.size === 0) this.#stopTicker();
+      return;
+    }
+    this.#ticking.add(visual);
+    this.#startTicker();
+  }
+
+  #syncAllTickers() {
+    for (const visual of this.#visuals.values()) this.#syncTicker(visual);
+    if (this.#ticking.size === 0) this.#stopTicker();
+  }
+
+  #connectMotionPreference() {
+    if (this.#motionQuery || (typeof globalThis.matchMedia !== "function")) return;
+    const query = globalThis.matchMedia("(prefers-reduced-motion: reduce)");
+    if (!query) return;
+    this.#motionQuery = query;
+    if (typeof query.addEventListener === "function") {
+      query.addEventListener("change", this.#onMotionPreferenceChange);
+    } else if (typeof query.addListener === "function") {
+      query.addListener(this.#onMotionPreferenceChange);
+    }
+  }
+
+  #disconnectMotionPreference() {
+    const query = this.#motionQuery;
+    if (!query) return;
+    if (typeof query.removeEventListener === "function") {
+      query.removeEventListener("change", this.#onMotionPreferenceChange);
+    } else if (typeof query.removeListener === "function") {
+      query.removeListener(this.#onMotionPreferenceChange);
+    }
+    this.#motionQuery = null;
+  }
+
   #startTicker() {
     if (this.#tickerActive || !this.#canvas?.app?.ticker) return;
     this.#ticker = this.#canvas.app.ticker;
-    this.#ticker.add(this.#onTick);
+    // Run after Foundry applies pending Token render flags (OBJECTS), but just
+    // before Canvas.primary.update refreshes transforms, bounds, and depth
+    // masks. This prevents the small ambient mesh offset from leaving Primary
+    // geometry one frame behind at transparency or occlusion boundaries.
+    const priorities = globalThis.PIXI?.UPDATE_PRIORITY ?? {};
+    const primaryPriority = priorities.PRIMARY ?? ((priorities.NORMAL ?? 0) + 3);
+    this.#ticker.add(this.#onTick, undefined, primaryPriority + 1);
     this.#tickerActive = true;
   }
 
@@ -208,7 +311,7 @@ export class FlyingVisualLayer {
 
   #clearVisuals() {
     this.#stopTicker();
-    this.#animating.clear();
+    this.#ticking.clear();
     for (const visual of this.#visuals.values()) visual.destroy();
     this.#visuals.clear();
   }
@@ -221,8 +324,14 @@ export function hasCoreElevationAnimation(token) {
   const currentElevation = normalizeFlyingElevation(token.document?.elevation);
   for (const context of contexts.values()) {
     let previousElevation = currentElevation;
-    for (const segment of [context?.to, ...(context?.chain ?? []).map(link => link?.to)]) {
-      const targetElevation = Number(segment?.elevation);
+    const primaryElevation = Number(context?.to?.elevation);
+    if (Number.isFinite(primaryElevation)) {
+      const normalizedTarget = normalizeFlyingElevation(primaryElevation);
+      if (Math.abs(normalizedTarget - previousElevation) > VISUAL_EPSILON) return true;
+      previousElevation = normalizedTarget;
+    }
+    for (const link of context?.chain ?? []) {
+      const targetElevation = Number(link?.to?.elevation);
       if (!Number.isFinite(targetElevation)) continue;
       const normalizedTarget = normalizeFlyingElevation(targetElevation);
       if (Math.abs(normalizedTarget - previousElevation) > VISUAL_EPSILON) return true;

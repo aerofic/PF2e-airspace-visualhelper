@@ -67,7 +67,14 @@ Hooks.on("moveToken", (document, movement, operation, user) => {
 });
 
 Hooks.on("controlToken", (token, controlled) => {
+  // Refresh the module-owned footprint cue without touching Foundry's border,
+  // hit area, targeting, or any TokenDocument state.
+  flyingVisualLayer.onRefreshToken(token, { refreshVisibility: true });
   altitudeHud.onControlToken(token, controlled);
+});
+
+Hooks.on("hoverToken", token => {
+  flyingVisualLayer.onRefreshToken(token, { refreshVisibility: true });
 });
 
 Hooks.on("updateActor", (actor, changes) => {

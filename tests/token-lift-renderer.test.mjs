@@ -18,7 +18,12 @@ function makeToken(x = 50, y = 50) {
   const token = {
     baseX: x,
     baseY: y,
-    mesh: { position: new Point(x, y), destroyed: false },
+    mesh: {
+      position: new Point(x, y),
+      scale: new Point(1, 1),
+      alpha: 0.8,
+      destroyed: false
+    },
     tooltip: { position: new Point(50, -4), destroyed: false },
     levelIndicator: { position: new Point(50, -24), destroyed: false },
     nameplate: { position: new Point(50, 104), destroyed: false },
@@ -29,6 +34,10 @@ function makeToken(x = 50, y = 50) {
     get: () => ({ x: token.baseX, y: token.baseY })
   });
   return token;
+}
+
+function assertClose(actual, expected, message) {
+  assert.ok(Math.abs(actual - expected) <= 0.000001, message ?? `${actual} != ${expected}`);
 }
 
 test("reapplies a visual lift after core movement without changing the ground center", () => {
@@ -181,4 +190,168 @@ test("preserves a nearby absolute mesh position written after this module", () =
   assert.deepEqual([token.mesh.position.x, token.mesh.position.y], [40, -40]);
   renderer.restore();
   assert.deepEqual([token.mesh.position.x, token.mesh.position.y], [40, -40]);
+});
+
+test("composes ambient motion into artwork UI while nudging only native elevation labels", () => {
+  const token = makeToken();
+  const renderer = new TokenLiftRenderer(token);
+  renderer.apply({
+    offsetX: -10,
+    offsetY: -30,
+    ambientOffsetY: 2,
+    labelOffsetX: 4,
+    labelOffsetY: -6
+  });
+
+  assert.deepEqual([token.mesh.position.x, token.mesh.position.y], [40, 22]);
+  assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [44, -38]);
+  assert.deepEqual([token.levelIndicator.position.x, token.levelIndicator.position.y], [44, -58]);
+  assert.deepEqual([token.nameplate.position.x, token.nameplate.position.y], [40, 76]);
+  assert.deepEqual([token.bars.position.x, token.bars.position.y], [-10, -28]);
+  assert.deepEqual([token.effects.position.x, token.effects.position.y], [-10, -28]);
+
+  renderer.restore();
+  assert.deepEqual([token.mesh.position.x, token.mesh.position.y], [50, 50]);
+  assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [50, -4]);
+  assert.deepEqual([token.levelIndicator.position.x, token.levelIndicator.position.y], [50, -24]);
+  assert.deepEqual([token.nameplate.position.x, token.nameplate.position.y], [50, 104]);
+});
+
+test("multiplies positive and negative core scale axes and attenuates core alpha", () => {
+  const token = makeToken();
+  token.mesh.scale.set(-2, 3);
+  token.mesh.alpha = 0.6;
+  const renderer = new TokenLiftRenderer(token);
+
+  renderer.apply({ scale: 1.25, alpha: 0.75 });
+  assert.deepEqual([token.mesh.scale.x, token.mesh.scale.y], [-2.5, 3.75]);
+  assertClose(token.mesh.alpha, 0.45);
+
+  renderer.restore();
+  assert.deepEqual([token.mesh.scale.x, token.mesh.scale.y], [-2, 3]);
+  assertClose(token.mesh.alpha, 0.6);
+});
+
+test("clamps visual alpha so it cannot increase the core-authored opacity", () => {
+  const token = makeToken();
+  token.mesh.alpha = 0.4;
+  const renderer = new TokenLiftRenderer(token);
+
+  renderer.apply({ alpha: 2 });
+  assertClose(token.mesh.alpha, 0.4);
+
+  renderer.apply({ alpha: -1 });
+  assertClose(token.mesh.alpha, 0);
+
+  renderer.apply({ enabled: false });
+  assertClose(token.mesh.alpha, 0.4);
+});
+
+test("position, scale, and alpha yield independently to later writers", () => {
+  const token = makeToken();
+  const renderer = new TokenLiftRenderer(token);
+  const pose = { offsetX: -10, offsetY: -30, scale: 1.2, alpha: 0.75 };
+  renderer.apply(pose);
+
+  token.mesh.scale.set(7, -9);
+  renderer.apply(pose);
+  assert.deepEqual([token.mesh.position.x, token.mesh.position.y], [40, 20]);
+  assert.deepEqual([token.mesh.scale.x, token.mesh.scale.y], [7, -9]);
+  assertClose(token.mesh.alpha, 0.6);
+
+  token.mesh.alpha = 0.37;
+  token.mesh.position.set(123, 456);
+  renderer.apply(pose);
+  assert.deepEqual([token.mesh.position.x, token.mesh.position.y], [123, 456]);
+  assert.deepEqual([token.mesh.scale.x, token.mesh.scale.y], [7, -9]);
+  assertClose(token.mesh.alpha, 0.37);
+
+  renderer.restore();
+  assert.deepEqual([token.mesh.position.x, token.mesh.position.y], [123, 456]);
+  assert.deepEqual([token.mesh.scale.x, token.mesh.scale.y], [7, -9]);
+  assertClose(token.mesh.alpha, 0.37);
+});
+
+test("rebases scale and alpha only after their confirmed core refresh flags", () => {
+  const token = makeToken();
+  const renderer = new TokenLiftRenderer(token);
+  const pose = { scale: 1.1, alpha: 0.8 };
+  renderer.apply(pose);
+
+  token.mesh.scale.set(-4, 5);
+  token.mesh.alpha = 0.4;
+  renderer.apply(pose, {
+    meshScaleBaseRefreshed: true,
+    meshAlphaBaseRefreshed: true
+  });
+  assertClose(token.mesh.scale.x, -4.4);
+  assertClose(token.mesh.scale.y, 5.5);
+  assertClose(token.mesh.alpha, 0.32);
+
+  renderer.restore();
+  assert.deepEqual([token.mesh.scale.x, token.mesh.scale.y], [-4, 5]);
+  assertClose(token.mesh.alpha, 0.4);
+});
+
+test("authoritative core refresh rebases even when its value equals the last visual write", () => {
+  const token = makeToken();
+  const renderer = new TokenLiftRenderer(token);
+  const pose = { offsetX: -10, scale: 1.2, alpha: 0.5 };
+  renderer.apply(pose);
+  assert.deepEqual([token.mesh.position.x, token.mesh.position.y], [40, 50]);
+  assert.deepEqual([token.mesh.scale.x, token.mesh.scale.y], [1.2, 1.2]);
+  assertClose(token.mesh.alpha, 0.4);
+  assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [40, -4]);
+
+  // Core writes new bases which happen to equal every previous module value.
+  token.baseX = 40;
+  token.mesh.position.set(40, 50);
+  token.mesh.scale.set(1.2, 1.2);
+  token.mesh.alpha = 0.4;
+  token.tooltip.position.set(40, -4);
+  renderer.apply(pose, {
+    meshBaseRefreshed: true,
+    meshScaleBaseRefreshed: true,
+    meshAlphaBaseRefreshed: true,
+    uiBaseRefreshed: true
+  });
+
+  assert.deepEqual([token.mesh.position.x, token.mesh.position.y], [30, 50]);
+  assert.deepEqual([token.mesh.scale.x, token.mesh.scale.y], [1.44, 1.44]);
+  assertClose(token.mesh.alpha, 0.2);
+  assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [30, -4]);
+  renderer.restore();
+  assert.deepEqual([token.mesh.position.x, token.mesh.position.y], [40, 50]);
+  assert.deepEqual([token.mesh.scale.x, token.mesh.scale.y], [1.2, 1.2]);
+  assertClose(token.mesh.alpha, 0.4);
+  assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [40, -4]);
+});
+
+test("restores all owned pose components on mesh replacement", () => {
+  const token = makeToken();
+  const renderer = new TokenLiftRenderer(token);
+  const firstMesh = token.mesh;
+  renderer.apply({ offsetX: -10, offsetY: -20, scale: 1.25, alpha: 0.5 });
+
+  token.mesh = {
+    position: new Point(80, 90),
+    scale: new Point(-3, 2),
+    alpha: 0.6,
+    destroyed: false
+  };
+  token.baseX = 80;
+  token.baseY = 90;
+  renderer.apply({ offsetX: -10, offsetY: -20, scale: 1.25, alpha: 0.5 });
+
+  assert.deepEqual([firstMesh.position.x, firstMesh.position.y], [50, 50]);
+  assert.deepEqual([firstMesh.scale.x, firstMesh.scale.y], [1, 1]);
+  assertClose(firstMesh.alpha, 0.8);
+  assert.deepEqual([token.mesh.position.x, token.mesh.position.y], [70, 70]);
+  assert.deepEqual([token.mesh.scale.x, token.mesh.scale.y], [-3.75, 2.5]);
+  assertClose(token.mesh.alpha, 0.3);
+
+  renderer.restore();
+  assert.deepEqual([token.mesh.position.x, token.mesh.position.y], [80, 90]);
+  assert.deepEqual([token.mesh.scale.x, token.mesh.scale.y], [-3, 2]);
+  assertClose(token.mesh.alpha, 0.6);
 });

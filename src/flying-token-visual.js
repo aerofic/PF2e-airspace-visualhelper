@@ -3,6 +3,7 @@ import { ProjectionRenderer } from "./projection-renderer.js";
 import { ShadowRenderer } from "./shadow-renderer.js";
 import { TokenLiftRenderer } from "./token-lift-renderer.js";
 import {
+  calculateAmbientOffset,
   calculateAnimationDuration,
   calculateVisualMetrics,
   easeInOutCosine,
@@ -11,6 +12,7 @@ import {
 import { VISUAL_EPSILON } from "./constants.js";
 
 const MIN_ANIMATION_FRAME_MS = 1000 / 30;
+const MIN_AMBIENT_FRAME_MS = 1000 / 24;
 
 /**
  * Reusable PIXI state for one Token. It owns display objects only and never
@@ -31,7 +33,16 @@ export class FlyingTokenVisual {
     this.followingCoreAnimation = false;
     this.labelAlpha = 1;
     this.lastAnimatedRenderAt = 0;
+    this.lastAmbientApplyAt = Number.NEGATIVE_INFINITY;
+    this.ambientOffsetY = 0;
+    this.ambientStartedAt = performance.now();
+    const motionSeed = stableStringHash(token.id ?? token.document?.id ?? "flying-token");
+    this.ambientPhase = ((motionSeed % 10_000) / 10_000) * Math.PI * 2;
+    this.ambientPeriod = 2800 + (motionSeed % 801);
+    this.reducedMotion = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
     this.metrics = null;
+    this.lastProjectionEmphasized = null;
+    this.liftEnabled = false;
 
     this.container = new PIXI.Container();
     this.container.name = "pf2e-flying-visual-helper";
@@ -50,9 +61,10 @@ export class FlyingTokenVisual {
     this.shadowGraphics = this.container.addChild(new PIXI.Graphics());
     this.projectionGraphics = this.container.addChild(new PIXI.Graphics());
     this.standGraphics = this.container.addChild(new PIXI.Graphics());
+    this.standSpecularGraphics = this.container.addChild(new PIXI.Graphics());
     this.shadow = new ShadowRenderer(this.shadowGraphics);
     this.projection = new ProjectionRenderer(this.projectionGraphics);
-    this.stand = new FlyingStand(this.standGraphics);
+    this.stand = new FlyingStand(this.standGraphics, this.standSpecularGraphics);
     this.tokenLift = new TokenLiftRenderer(token);
 
     parent.addChild(this.container);
@@ -65,6 +77,20 @@ export class FlyingTokenVisual {
     return this.animation !== null;
   }
 
+  /** Whether the shared Scene ticker still has useful work for this Token. */
+  get requiresTicker() {
+    return this.isAnimating || this.needsAmbientMotion;
+  }
+
+  get needsAmbientMotion() {
+    return !this.reducedMotion
+      && !this.animation
+      && !this.followingCoreAnimation
+      && !!this.metrics?.flying
+      && !!this.container.visible
+      && ((this.metrics?.token?.bobAmplitude ?? 0) > VISUAL_EPSILON);
+  }
+
   get destroyed() {
     return this.container.destroyed;
   }
@@ -72,8 +98,8 @@ export class FlyingTokenVisual {
   get canRetire() {
     return !this.animation
       && !this.followingCoreAnimation
-      && (this.displayElevation <= VISUAL_EPSILON)
-      && (this.targetElevation <= VISUAL_EPSILON);
+      && (this.displayElevation <= 0)
+      && (this.targetElevation <= 0);
   }
 
   /** Idempotently reattach after a Token redraw. */
@@ -91,11 +117,26 @@ export class FlyingTokenVisual {
     this.render();
   }
 
+  /** React to a live prefers-reduced-motion change without recreating PIXI. */
+  setReducedMotion(value) {
+    const reduced = !!value;
+    if (reduced === this.reducedMotion) return;
+    this.reducedMotion = reduced;
+    this.#resetAmbientMotion({ apply: true });
+    this.ambientStartedAt = performance.now();
+    if (reduced && this.animation) {
+      this.displayElevation = this.targetElevation;
+      this.animation = null;
+      this.labelAlpha = 1;
+      this.render();
+    }
+  }
+
   /** Start a fallback tween from the current displayed elevation. */
   setElevation(value, { animate = true } = {}) {
     const target = normalizeFlyingElevation(value);
-    if ((Math.abs(target - this.targetElevation) <= VISUAL_EPSILON) && this.animation) return false;
-    if ((Math.abs(target - this.displayElevation) <= VISUAL_EPSILON) && !this.animation) {
+    if ((target === this.targetElevation) && this.animation) return false;
+    if ((target === this.displayElevation) && !this.animation) {
       this.targetElevation = target;
       this.render();
       return false;
@@ -104,12 +145,13 @@ export class FlyingTokenVisual {
     this.targetElevation = target;
     this.followingCoreAnimation = false;
     this.coreAnimation = null;
-    const reducedMotion = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
-    if (!animate || reducedMotion) {
+    this.#resetAmbientMotion();
+    if (!animate || this.reducedMotion) {
       this.animation = null;
       this.displayElevation = target;
       this.labelAlpha = 1;
       this.render();
+      this.ambientStartedAt = performance.now();
       return false;
     }
 
@@ -135,6 +177,7 @@ export class FlyingTokenVisual {
       to: this.targetElevation,
       labelAlphaFrom: this.labelAlpha
     };
+    this.#resetAmbientMotion();
     this.labelAlpha = 1;
     this.#applyNativeTooltipState();
   }
@@ -157,6 +200,7 @@ export class FlyingTokenVisual {
     if (!active) {
       this.targetElevation = this.displayElevation;
       this.coreAnimation = null;
+      this.ambientStartedAt = performance.now();
     }
     // Tooltip alpha is cheap and should track every core frame even when PIXI
     // geometry redraws are throttled to roughly 30 fps.
@@ -164,25 +208,42 @@ export class FlyingTokenVisual {
     this.#renderAnimationFrame(performance.now(), { force: !active });
   }
 
-  /** @returns {boolean} Whether this visual still needs fallback frames. */
+  /** @returns {boolean} Whether this visual still needs shared ticker frames. */
   tick(now) {
-    if (!this.animation) return false;
-    const { from, to, labelAlphaFrom, startedAt, duration } = this.animation;
-    const progress = Math.min(Math.max((now - startedAt) / duration, 0), 1);
-    const eased = easeInOutCosine(progress);
-    this.displayElevation = from + ((to - from) * eased);
+    if (this.animation) {
+      const { from, to, labelAlphaFrom, startedAt, duration } = this.animation;
+      const progress = Math.min(Math.max((now - startedAt) / duration, 0), 1);
+      const eased = easeInOutCosine(progress);
+      this.displayElevation = from + ((to - from) * eased);
 
-    // Foundry owns the text and units. V2 only fades its public tooltip alpha.
-    this.labelAlpha = labelTransitionAlpha(progress, to, labelAlphaFrom);
+      // Foundry owns the text and units. V2 only fades its public tooltip alpha.
+      this.labelAlpha = labelTransitionAlpha(progress, to, labelAlphaFrom);
 
-    if (progress >= 1) {
-      this.displayElevation = to;
-      this.animation = null;
-      this.labelAlpha = 1;
+      if (progress >= 1) {
+        this.displayElevation = to;
+        this.animation = null;
+        this.labelAlpha = 1;
+        this.ambientStartedAt = now;
+      }
+
+      this.#applyNativeTooltipState();
+      this.#renderAnimationFrame(now, { force: progress >= 1 });
     }
 
-    this.#renderAnimationFrame(now, { force: progress >= 1 });
-    return this.animation !== null;
+    if (this.needsAmbientMotion && ((now - this.lastAmbientApplyAt) >= MIN_AMBIENT_FRAME_MS)) {
+      this.ambientOffsetY = calculateAmbientOffset(
+        now - this.ambientStartedAt,
+        this.ambientPhase,
+        this.metrics.token.bobAmplitude,
+        this.ambientPeriod,
+        this.reducedMotion
+      );
+      this.tokenLift.applyAmbient(this.ambientOffsetY);
+      this.lastAmbientApplyAt = now;
+    } else if (!this.needsAmbientMotion && (Math.abs(this.ambientOffsetY) > VISUAL_EPSILON)) {
+      this.#resetAmbientMotion({ apply: true });
+    }
+    return this.requiresTicker;
   }
 
   /** Handle only render flags which affect geometry or the native tooltip. */
@@ -190,27 +251,52 @@ export class FlyingTokenVisual {
     const positionRefreshed = flags.refreshPosition || flags.refreshTransform || flags.redraw;
     const uiBaseRefreshed = flags.refreshSize || flags.refreshTransform || flags.redraw;
     const uiRetainsOwnedOffset = flags.refreshTooltip && !uiBaseRefreshed;
+    const meshScaleBaseRefreshed = flags.refreshSize
+      || flags.refreshTransform
+      || flags.refreshMesh
+      || flags.redraw;
+    const meshAlphaBaseRefreshed = flags.refreshState || flags.refreshMesh || flags.redraw;
     if (positionRefreshed) this.#syncPosition();
-    if (flags.refreshSize || flags.refreshShape || flags.refreshState || flags.refreshVisibility || flags.redraw) {
+    if (flags.refreshSize || flags.refreshShape || flags.redraw) {
       this.render({
         meshBaseRefreshed: positionRefreshed,
+        meshScaleBaseRefreshed,
+        meshAlphaBaseRefreshed,
         uiBaseRefreshed,
         uiRetainsOwnedOffset
       });
       return;
     }
+    if (flags.refreshState || flags.refreshVisibility) {
+      this.#updateVisibility();
+      this.#refreshProjectionEmphasis();
+    }
     // Horizontal movement does not rebuild any Graphics. Foundry has just put
     // the Primary mesh back at token.center, so reapply the cached visual pose.
-    this.#applyTokenLift({
-      meshBaseRefreshed: positionRefreshed,
-      uiBaseRefreshed,
-      uiRetainsOwnedOffset
-    });
+    const canUsePositionFastPath = positionRefreshed
+      && !meshScaleBaseRefreshed
+      && !meshAlphaBaseRefreshed
+      && !uiBaseRefreshed
+      && !uiRetainsOwnedOffset
+      && this.liftEnabled
+      && this.#shouldEnableTokenLift();
+    if (canUsePositionFastPath) this.tokenLift.rebaseMeshPosition(this.ambientOffsetY);
+    else {
+      this.#applyTokenLift({
+        meshBaseRefreshed: positionRefreshed,
+        meshScaleBaseRefreshed,
+        meshAlphaBaseRefreshed,
+        uiBaseRefreshed,
+        uiRetainsOwnedOffset
+      });
+    }
     if (flags.refreshTooltip || flags.refreshElevation) this.#applyNativeTooltipState();
   }
 
   render({
     meshBaseRefreshed = false,
+    meshScaleBaseRefreshed = false,
+    meshAlphaBaseRefreshed = false,
     uiBaseRefreshed = false,
     uiRetainsOwnedOffset = false
   } = {}) {
@@ -233,13 +319,15 @@ export class FlyingTokenVisual {
     });
     this.metrics = metrics;
 
-    const visibleToUser = (this.token.visible !== false) && !this.token.document.isSecret;
-    const geometryEnabled = this.#hasVisibleGeometry(metrics);
-    this.container.visible = metrics.flying && visibleToUser && geometryEnabled;
-    this.shadow.render(metrics, this.settings.enableShadow);
-    this.projection.render(metrics, this.settings.enableGroundProjection);
-    this.stand.render(metrics, this.settings.enableStand);
-    this.#applyTokenLift({ meshBaseRefreshed, uiBaseRefreshed, uiRetainsOwnedOffset });
+    this.#updateVisibility();
+    this.#renderGeometry();
+    this.#applyTokenLift({
+      meshBaseRefreshed,
+      meshScaleBaseRefreshed,
+      meshAlphaBaseRefreshed,
+      uiBaseRefreshed,
+      uiRetainsOwnedOffset
+    });
     this.#applyNativeTooltipState();
     this.lastAnimatedRenderAt = performance.now();
   }
@@ -247,6 +335,8 @@ export class FlyingTokenVisual {
   destroy() {
     this.animation = null;
     this.coreAnimation = null;
+    this.ambientOffsetY = 0;
+    this.liftEnabled = false;
     this.tokenLift.restore();
     this.#restoreNativeTooltip();
     if (!this.container.destroyed) {
@@ -262,13 +352,14 @@ export class FlyingTokenVisual {
     this.nativeTooltip = tooltip;
     this.tooltipHiddenByModule = false;
     this.tooltipAlphaAnimatedByModule = false;
+    this.tooltipAlphaYielded = false;
   }
 
   #applyNativeTooltipState() {
     this.#captureNativeTooltip();
     const tooltip = this.nativeTooltip;
     if (!tooltip || tooltip.destroyed) return;
-    const flying = (this.displayElevation > VISUAL_EPSILON) || (this.targetElevation > VISUAL_EPSILON);
+    const flying = (this.displayElevation > 0) || (this.targetElevation > 0);
 
     const shouldHide = flying && !this.settings.enableHeightLabel;
     if (shouldHide && !this.tooltipHiddenByModule) {
@@ -285,14 +376,24 @@ export class FlyingTokenVisual {
       if (!this.tooltipAlphaAnimatedByModule) {
         this.tooltipAlphaBeforeModule = tooltip.alpha;
         this.tooltipAlphaAnimatedByModule = true;
+        this.tooltipAlphaYielded = false;
+      } else if (!this.tooltipAlphaYielded
+        && (Math.abs(tooltip.alpha - this.tooltipLastWrittenAlpha) > VISUAL_EPSILON)) {
+        // A later module now owns tooltip alpha. Yield for the remainder of
+        // this transition instead of overwriting or restoring its value.
+        this.tooltipAlphaYielded = true;
       }
-      this.tooltipLastWrittenAlpha = this.tooltipAlphaBeforeModule * this.labelAlpha;
-      tooltip.alpha = this.tooltipLastWrittenAlpha;
+      if (!this.tooltipAlphaYielded) {
+        this.tooltipLastWrittenAlpha = this.tooltipAlphaBeforeModule * this.labelAlpha;
+        tooltip.alpha = this.tooltipLastWrittenAlpha;
+      }
     } else if (this.tooltipAlphaAnimatedByModule) {
-      if (Math.abs(tooltip.alpha - this.tooltipLastWrittenAlpha) <= VISUAL_EPSILON) {
+      if (!this.tooltipAlphaYielded
+        && (Math.abs(tooltip.alpha - this.tooltipLastWrittenAlpha) <= VISUAL_EPSILON)) {
         tooltip.alpha = this.tooltipAlphaBeforeModule;
       }
       this.tooltipAlphaAnimatedByModule = false;
+      this.tooltipAlphaYielded = false;
     }
   }
 
@@ -303,6 +404,7 @@ export class FlyingTokenVisual {
         tooltip.renderable = this.tooltipRenderableBeforeModule;
       }
       if (this.tooltipAlphaAnimatedByModule
+        && !this.tooltipAlphaYielded
         && (Math.abs(tooltip.alpha - this.tooltipLastWrittenAlpha) <= VISUAL_EPSILON)) {
         tooltip.alpha = this.tooltipAlphaBeforeModule;
       }
@@ -310,6 +412,7 @@ export class FlyingTokenVisual {
     this.nativeTooltip = null;
     this.tooltipHiddenByModule = false;
     this.tooltipAlphaAnimatedByModule = false;
+    this.tooltipAlphaYielded = false;
   }
 
   #renderAnimationFrame(now, { force = false } = {}) {
@@ -319,19 +422,70 @@ export class FlyingTokenVisual {
 
   #applyTokenLift({
     meshBaseRefreshed = false,
+    meshScaleBaseRefreshed = false,
+    meshAlphaBaseRefreshed = false,
     uiBaseRefreshed = false,
     uiRetainsOwnedOffset = false
   } = {}) {
     const metrics = this.metrics;
     if (!metrics) return;
-    const visibleToUser = (this.token.visible !== false) && !this.token.document.isSecret;
-    const geometryEnabled = this.#hasVisibleGeometry(metrics);
+    const enabled = this.#shouldEnableTokenLift(metrics);
+    metrics.token.ambientOffsetY = this.ambientOffsetY;
     this.tokenLift.apply(metrics.token, {
-      enabled: metrics.flying && visibleToUser && geometryEnabled,
+      enabled,
       meshBaseRefreshed,
+      meshScaleBaseRefreshed,
+      meshAlphaBaseRefreshed,
       uiBaseRefreshed,
       uiRetainsOwnedOffset
     });
+    this.liftEnabled = enabled;
+  }
+
+  #shouldEnableTokenLift(metrics = this.metrics) {
+    if (!metrics) return false;
+    const visibleToUser = (this.token.visible !== false) && !this.token.document.isSecret;
+    return metrics.flying && visibleToUser && this.#hasVisibleGeometry(metrics);
+  }
+
+  #updateVisibility() {
+    const metrics = this.metrics;
+    if (!metrics) return;
+    const visibleToUser = (this.token.visible !== false) && !this.token.document.isSecret;
+    const geometryEnabled = this.#hasVisibleGeometry(metrics);
+    this.container.visible = metrics.flying && visibleToUser && geometryEnabled;
+  }
+
+  #renderGeometry() {
+    const metrics = this.metrics;
+    if (!metrics) return;
+    this.shadow.render(metrics, this.settings.enableShadow);
+    this.#renderProjection();
+    this.stand.render(metrics, this.settings.enableStand);
+  }
+
+  #renderProjection() {
+    const metrics = this.metrics;
+    if (!metrics) return;
+    const emphasized = !!(this.token.controlled || this.token.hover);
+    this.projection.render(metrics, this.settings.enableGroundProjection, {
+      standEnabled: this.settings.enableStand && (metrics.stand.opacity > VISUAL_EPSILON),
+      emphasized,
+      footprintShape: this.token.shape ?? null
+    });
+    this.lastProjectionEmphasized = emphasized;
+  }
+
+  #refreshProjectionEmphasis() {
+    const emphasized = !!(this.token.controlled || this.token.hover);
+    if (emphasized !== this.lastProjectionEmphasized) this.#renderProjection();
+  }
+
+  #resetAmbientMotion({ apply = false } = {}) {
+    const hadOffset = Math.abs(this.ambientOffsetY) > VISUAL_EPSILON;
+    this.ambientOffsetY = 0;
+    this.lastAmbientApplyAt = Number.NEGATIVE_INFINITY;
+    if (apply && hadOffset) this.tokenLift.applyAmbient(0);
   }
 
   #hasVisibleGeometry(metrics) {
@@ -367,4 +521,15 @@ export class FlyingTokenVisual {
 function labelTransitionAlpha(progress, target, initialAlpha = 1) {
   if (progress < 0.45) return initialAlpha * (1 - (progress / 0.45));
   return target > 0 ? (progress - 0.45) / 0.55 : 0;
+}
+
+/** Small deterministic FNV-1a hash; avoids synchronized ambient motion. */
+function stableStringHash(value) {
+  const string = String(value);
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < string.length; index += 1) {
+    hash ^= string.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
 }

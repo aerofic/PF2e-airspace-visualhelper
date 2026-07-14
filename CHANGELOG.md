@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.0 — Layered Acrylic Flight Presentation
+
+- Rebuilt the flight stand as layered acrylic with a restrained transparent body, refractive edges, and narrow specular highlights instead of a laser-like glow.
+- Redesigned the fixed ground base as a translucent elliptical plate with visible thickness, inner and outer rims, a lower pin, and a natural top connector beneath the Token art.
+- Separated and strengthened contact and height-cast shadows while preserving elevation-dependent scale, drift, opacity, and complete footprint bounds.
+- Added a non-interactive Foundry-shape footprint cue which strengthens on hover or control without moving the native border or hit area.
+- Replaced discrete height bands with one continuous takeoff and compressed-height curve, including finite bounds for extreme elevation and Token dimensions.
+- Added reversible airborne Mesh scale, alpha, lower-rim accent, and deterministic shared low-frequency bobbing for every visible elevated Token, with reduced-motion support.
+- Kept Foundry VTT's native elevation tooltip and Level indicator, applying only a reversible layout offset to avoid the lifted art.
+- Preserved TokenDocument coordinates, hit areas, movement, snapping, vision, PF2e rules, dynamic Token Rings, and third-party per-property last-write ownership.
+
 ## 0.3.1 — Ultra-Compact Navigation HUD
 
 - Replaced the always-open top panel with a frameless, highly translucent `360 × 32` navigation-style summary bar.

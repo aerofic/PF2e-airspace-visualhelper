@@ -20,9 +20,48 @@ const STAND_LEAN_RADIANS = 12 * (Math.PI / 180);
 // dimensions also prevents otherwise finite inputs from overflowing later
 // additions and distance calculations.
 const MAX_CANVAS_DIMENSION = 1_000_000;
+const MAX_HEIGHT_STEPS = 1_000_000;
 const MAX_STAND_LEAN_GRIDS = 1.5;
 const SHADOW_OUTER_SCALE_X = 1.24;
 const SHADOW_OUTER_SCALE_Y = 1.34;
+const CONTACT_OUTER_SCALE_X = 1.12;
+const CONTACT_OUTER_SCALE_Y = 1.16;
+
+/** A continuous elevation response shared by every visual component. */
+export function calculateHeightCurve(elevation, gridDistance = 5) {
+  const safeElevation = normalizeFlyingElevation(elevation);
+  if (safeElevation === 0) {
+    return { steps: 0, takeoff: 0, signal: 0, clearanceGrids: 0 };
+  }
+
+  const distance = positiveOr(gridDistance, 5);
+  const quotient = safeElevation / distance;
+  // Preserve a positive response even for subnormal custom elevation values.
+  const steps = clamp(
+    Number.isFinite(quotient) ? Math.max(quotient, Number.EPSILON) : MAX_HEIGHT_STEPS,
+    Number.EPSILON,
+    MAX_HEIGHT_STEPS
+  );
+  const takeoff = smootherStep(clamp(steps, 0, 1));
+  const signal = -Math.expm1(-steps / 10);
+  // A logarithmic tabletop scale leaves 5 ft restrained but allocates more
+  // screen distance between 20, 60 and 100 ft, where tactical comparisons are
+  // most common. The takeoff term keeps the origin continuous and the cap
+  // prevents extreme custom elevation from spanning the whole Scene.
+  const heightLog = Math.log1p(steps) / Math.LN2;
+  const clearanceGrids = clamp(
+    (0.06 * takeoff) + (0.11 * Math.pow(heightLog, 1.38)),
+    0,
+    1.8
+  );
+  return { steps, takeoff, signal, clearanceGrids };
+}
+
+/** Quintic easing with zero velocity at both ends. */
+export function smootherStep(value) {
+  const t = clamp(finiteOr(value, 0), 0, 1);
+  return t * t * t * ((t * ((t * 6) - 15)) + 10);
+}
 
 /**
  * Calculate the visual-only pose of a flying Token.
@@ -49,9 +88,8 @@ export function calculateFlightPose({
     x: boundedGroundCoordinate(groundX, width / 2, width),
     y: boundedGroundCoordinate(groundY, height / 2, height)
   };
-  // Keep enough of the art above the original footprint for elongated Tokens.
-  // The old 1.5-grid upper cap left 1x4 and 2x3 art overlapping the base.
-  const halfVisual = Math.max(height * 0.5, safeGridSize * 0.3);
+  const halfVisual = height * 0.5;
+  const heightCurve = calculateHeightCurve(safeElevation, safeGridDistance);
 
   if (safeElevation === 0) {
     return {
@@ -62,21 +100,16 @@ export function calculateFlightPose({
       standTop: { ...ground },
       lift: 0,
       lean: 0,
-      halfVisual
+      halfVisual,
+      heightCurve
     };
   }
 
-  const gridSteps = safeElevation / safeGridDistance;
-  const heightBand = safeElevation <= 30 ? 0 : safeElevation <= 100 ? 1 : 2;
-  const bandBoost = 1 + (heightBand * 0.06);
-  const clearance = clamp(
-    safeGridSize * (0.08 + (0.18 * Math.sqrt(gridSteps))) * bandBoost,
-    safeGridSize * 0.18,
-    safeGridSize * 1.6
-  );
-  const lift = halfVisual + clearance;
-  // Target 12 degrees from vertical. The generous cap is only a guard for
-  // pathological custom Token dimensions, not a normal pose constraint.
+  // The takeoff envelope removes the old half-Token jump immediately above
+  // zero. At one grid step the complete art clears its ground plate, while the
+  // logarithmically compressed clearance keeps extreme heights readable.
+  const lift = (halfVisual * heightCurve.takeoff)
+    + (safeGridSize * heightCurve.clearanceGrids);
   const lean = Math.min(
     lift * Math.tan(STAND_LEAN_RADIANS),
     safeGridSize * MAX_STAND_LEAN_GRIDS
@@ -95,7 +128,8 @@ export function calculateFlightPose({
     standTop: { ...tokenCenter },
     lift,
     lean,
-    halfVisual
+    halfVisual,
+    heightCurve
   };
 }
 
@@ -132,28 +166,47 @@ export function calculateVisualMetrics({
     groundY
   });
 
-  if (safeElevation === 0) {
-    return emptyMetrics({ pose });
-  }
+  if (safeElevation === 0) return emptyMetrics({ pose, width, height });
 
-  const gridSteps = safeElevation / safeGridDistance;
-  const heightBand = safeElevation <= 30 ? 0 : safeElevation <= 100 ? 1 : 2;
+  const { signal, takeoff } = pose.heightCurve;
   const standLength = Math.hypot(
     pose.ground.x - pose.standTop.x,
     pose.ground.y - pose.standTop.y
   );
-  const lineWidth = clamp(safeGridSize * (0.048 + (heightBand * 0.004)), 4, 9);
-  const tokenReference = Math.min(width, height);
+  const axisX = standLength > 0 ? (pose.ground.x - pose.standTop.x) / standLength : 0;
+  const axisY = standLength > 0 ? (pose.ground.y - pose.standTop.y) / standLength : 1;
+  const normalX = -axisY;
+  const normalY = axisX;
+  const lineWidth = clamp(safeGridSize * (0.034 + (signal * 0.007)), 3.25, 7);
+  const { equivalentRadius, compressedRadius } = calculateTokenRadii(width, height, safeGridSize);
 
-  const distanceMultiplier = clamp(Number(shadowDistanceMultiplier) || 1, 0.25, 3);
-  const shadowDistance = clamp(
-    pose.lift * 0.14 * distanceMultiplier,
-    safeGridSize * 0.04,
-    safeGridSize * 0.42
+  const normalizedStandOpacity = clamp(finiteOr(standOpacity, 0), 0, 1);
+  const normalizedShadowOpacity = clamp(finiteOr(shadowOpacity, 0), 0, 1);
+  const normalizedProjectionOpacity = clamp(finiteOr(projectionOpacity, 0), 0, 1);
+  const baseRadiusX = radiusAtFixedCenter(
+    pose.ground.x,
+    clamp(compressedRadius * 0.74, safeGridSize * 0.16, safeGridSize * 0.46),
+    width
   );
-  const shadowScale = clamp(1 - (Math.log1p(gridSteps) * 0.08), 0.62, 0.96);
-  const shadowFalloff = clamp(1.08 - (Math.log1p(gridSteps) * 0.12), 0.42, 1);
-  const desiredShadowRadiusX = tokenReference * 0.38 * shadowScale;
+  const baseRadiusY = radiusAtFixedCenter(
+    pose.ground.y,
+    clamp(safeGridSize * 0.075, 5, 12),
+    height
+  );
+  const baseThickness = Math.min(
+    clamp(safeGridSize * 0.024, 1.5, 4),
+    Math.max(0, height - pose.ground.y - baseRadiusY)
+  );
+
+  const distanceMultiplier = clamp(finiteOr(shadowDistanceMultiplier, 1), 0.25, 3);
+  const desiredShadowDistance = safeGridSize * clamp(
+    (0.05 + (0.32 * signal)) * distanceMultiplier,
+    0.02,
+    0.55
+  );
+  const shadowScale = 0.96 - (0.3 * signal);
+  const shadowFalloff = 1 - (0.58 * signal);
+  const desiredShadowRadiusX = compressedRadius * 0.72 * shadowScale;
   // Account for ShadowRenderer's outer soft ellipse so the complete visual,
   // rather than only its nominal radius, remains in the footprint bounds.
   const shadowRadiusX = Math.min(
@@ -161,50 +214,67 @@ export function calculateVisualMetrics({
     width / (2 * SHADOW_OUTER_SCALE_X)
   );
   const shadowRadiusY = Math.min(
-    desiredShadowRadiusX * 0.34,
+    desiredShadowRadiusX * (0.3 - (0.05 * signal)),
     height / (2 * SHADOW_OUTER_SCALE_Y)
   );
   const shadowX = clampEllipseCenter(
-    pose.ground.x + (shadowDistance * 0.82),
+    pose.ground.x + (desiredShadowDistance * 0.91),
     shadowRadiusX * SHADOW_OUTER_SCALE_X,
     width
   );
   const shadowY = clampEllipseCenter(
-    pose.ground.y + (shadowDistance * 0.36),
+    pose.ground.y + (desiredShadowDistance * 0.41),
     shadowRadiusY * SHADOW_OUTER_SCALE_Y,
     height
   );
 
-  const projectionFalloff = clamp(1.02 - (Math.log1p(gridSteps) * 0.1), 0.35, 0.96);
-  const dashLength = clamp(safeGridSize * 0.07, 5, 11);
-  const normalizedStandOpacity = clamp(Number(standOpacity) || 0, 0, 1);
-  const normalizedShadowOpacity = clamp(Number(shadowOpacity) || 0, 0, 1);
-  const baseRadiusX = radiusAtFixedCenter(
+  // Contact shadow belongs to the physical ground plate and does not drift or
+  // fade with height once the Token has completed its first 5 ft of takeoff.
+  const contactRadiusX = Math.min(
+    baseRadiusX * 0.78,
+    width / (2 * CONTACT_OUTER_SCALE_X)
+  );
+  const contactRadiusY = Math.min(
+    baseRadiusY * 0.62,
+    height / (2 * CONTACT_OUTER_SCALE_Y)
+  );
+  const contactCoreRadiusX = contactRadiusX * 0.58;
+  const contactCoreRadiusY = contactRadiusY * 0.54;
+  const contactX = clampEllipseCenter(
     pose.ground.x,
-    clamp(tokenReference * 0.28, safeGridSize * 0.14, safeGridSize * 0.4),
+    contactRadiusX * CONTACT_OUTER_SCALE_X,
     width
   );
-  const baseRadiusY = radiusAtFixedCenter(
-    pose.ground.y,
-    clamp(safeGridSize * 0.075, 5, 11),
-    height
-  );
-  const contactRadiusX = Math.min(baseRadiusX * 0.92, width / 2);
-  const contactRadiusY = Math.min(baseRadiusY * 1.08, height / 2);
-  const contactX = clampEllipseCenter(pose.ground.x, contactRadiusX, width);
   const contactY = clampEllipseCenter(
-    pose.ground.y + (baseRadiusY * 0.28),
-    contactRadiusY,
+    pose.ground.y + (baseRadiusY * 0.34),
+    contactRadiusY * CONTACT_OUTER_SCALE_Y,
     height
   );
 
+  const connectorInset = clamp(height * 0.44, safeGridSize * 0.12, height * 0.48);
+  const connectorX = pose.standTop.x + (axisX * connectorInset);
+  const connectorY = pose.standTop.y + (axisY * connectorInset);
+  const perspectiveGrowth = Math.min(0.04, (safeGridSize * 0.02) / equivalentRadius);
+  const perspectiveScale = 1 + (signal * perspectiveGrowth);
+  const alphaMultiplier = 1 - (0.045 * signal);
+  const labelNudge = takeoff * clamp(safeGridSize * 0.075, 6, 14);
+
+  const dashLength = clamp(safeGridSize * 0.065, 5, 10);
+  const projectionFalloff = 1 - (0.46 * signal);
+
   return {
     flying: true,
+    height: { ...pose.heightCurve },
     token: {
       offsetX: pose.tokenOffset.x,
       offsetY: pose.tokenOffset.y,
       centerX: pose.tokenCenter.x,
-      centerY: pose.tokenCenter.y
+      centerY: pose.tokenCenter.y,
+      scale: perspectiveScale,
+      alpha: alphaMultiplier,
+      bobAmplitude: takeoff * clamp(safeGridSize * (0.008 + (signal * 0.004)), 0.7, 1.4),
+      labelOffsetX: -labelNudge,
+      labelOffsetY: -(labelNudge * 0.72)
     },
     stand: {
       topX: pose.standTop.x,
@@ -213,110 +283,195 @@ export function calculateVisualMetrics({
       baseY: pose.ground.y,
       length: standLength,
       width: lineWidth,
-      opacity: normalizedStandOpacity
+      opacity: normalizedStandOpacity * takeoff,
+      axisX,
+      axisY,
+      normalX,
+      normalY
+    },
+    connector: {
+      x: connectorX,
+      y: connectorY,
+      length: clamp(safeGridSize * 0.11, 7, 16),
+      width: lineWidth * 1.55
     },
     base: {
       x: pose.ground.x,
       y: pose.ground.y,
       radiusX: baseRadiusX,
-      radiusY: baseRadiusY
+      radiusY: baseRadiusY,
+      thickness: baseThickness,
+      pinLength: clamp(safeGridSize * 0.09, 6, 14),
+      pinWidth: lineWidth * 1.45
     },
     shadow: {
       x: shadowX,
       y: shadowY,
       radiusX: shadowRadiusX,
       radiusY: shadowRadiusY,
-      alpha: normalizedShadowOpacity * shadowFalloff,
+      alpha: normalizedShadowOpacity * shadowFalloff * takeoff,
       contactX,
       contactY,
       contactRadiusX,
       contactRadiusY,
-      contactAlpha: normalizedShadowOpacity * 0.3
+      contactCoreRadiusX,
+      contactCoreRadiusY,
+      contactAlpha: normalizedShadowOpacity * 0.42 * takeoff
     },
     projection: {
       startX: pose.standTop.x,
       startY: pose.standTop.y,
       endX: pose.ground.x,
       endY: pose.ground.y,
-      markerRadius: Math.min(
-        clamp(tokenReference * 0.12, 6, safeGridSize * 0.2),
-        pose.ground.x,
-        width - pose.ground.x,
-        pose.ground.y,
-        height - pose.ground.y
-      ),
+      markerRadius: Math.min(baseRadiusX * 0.72, baseRadiusY * 2.6),
+      markerRadiusX: baseRadiusX * 0.72,
+      markerRadiusY: baseRadiusY * 0.72,
       dashLength,
-      gapLength: dashLength * 0.68,
-      lineWidth: clamp(safeGridSize * 0.022, 1.75, 4.5),
-      alpha: clamp(Number(projectionOpacity) || 0, 0, 1) * projectionFalloff
+      gapLength: dashLength * 0.82,
+      lineWidth: clamp(safeGridSize * 0.014, 1.25, 3),
+      alpha: normalizedProjectionOpacity * projectionFalloff * takeoff,
+      footprint: { x: 0, y: 0, width, height },
+      reticleAlpha: normalizedProjectionOpacity * takeoff * (0.08 + (0.04 * (1 - signal)))
     },
+    airAccent: {
+      x: pose.tokenCenter.x,
+      y: pose.tokenCenter.y + (height * 0.38),
+      radiusX: clamp(compressedRadius * 0.54, 8, safeGridSize * 0.42),
+      radiusY: clamp(safeGridSize * 0.032, 2.5, 6),
+      alpha: normalizedStandOpacity * takeoff * (0.055 + (signal * 0.045))
+    },
+    // Alias retained for integrations written against V2 0.3.x.
     liftGlow: {
       x: pose.tokenCenter.x,
-      y: pose.tokenCenter.y,
-      radiusX: clamp(tokenReference * 0.19, 8, safeGridSize * 0.3),
-      radiusY: clamp(safeGridSize * 0.035, 3, 6),
-      alpha: normalizedStandOpacity * clamp(0.16 + (heightBand * 0.03), 0.16, 0.22)
+      y: pose.tokenCenter.y + (height * 0.38),
+      radiusX: clamp(compressedRadius * 0.54, 8, safeGridSize * 0.42),
+      radiusY: clamp(safeGridSize * 0.032, 2.5, 6),
+      alpha: normalizedStandOpacity * takeoff * (0.055 + (signal * 0.045))
     }
   };
 }
 
+/** Deterministic, reduced-motion-aware idle offset for the shared ticker. */
+export function calculateAmbientOffset(
+  elapsed,
+  phase = 0,
+  amplitude = 0,
+  period = 3200,
+  reducedMotion = false
+) {
+  if (reducedMotion) return 0;
+  const safeAmplitude = clamp(Math.abs(finiteOr(amplitude, 0)), 0, 4);
+  if (safeAmplitude === 0) return 0;
+  const safeElapsed = Math.max(0, finiteOr(elapsed, 0));
+  const safePeriod = clamp(positiveOr(period, 3200), 1000, 10_000);
+  const envelope = safeElapsed >= 240 ? 1 : smootherStep(safeElapsed / 240);
+  const tau = Math.PI * 2;
+  const cycleAngle = ((safeElapsed % safePeriod) / safePeriod) * tau;
+  const phaseAngle = finiteOr(phase, 0) % tau;
+  return Math.sin((cycleAngle + phaseAngle) % tau)
+    * safeAmplitude
+    * envelope;
+}
+
 /** Duration is bounded so both 5 ft and extreme changes remain responsive. */
 export function calculateAnimationDuration(from, to, gridDistance = 5) {
-  const deltaSteps = Math.abs(normalizeFlyingElevation(to) - normalizeFlyingElevation(from))
-    / positiveOr(gridDistance, 5);
+  const delta = Math.abs(normalizeFlyingElevation(to) - normalizeFlyingElevation(from));
+  const quotient = delta / positiveOr(gridDistance, 5);
+  const deltaSteps = Number.isFinite(quotient) ? quotient : MAX_HEIGHT_STEPS;
   return clamp(240 + (deltaSteps * 18), 260, 650);
 }
 
 /** Smooth acceleration and deceleration for stand/projection movement. */
 export function easeInOutCosine(progress) {
-  const t = clamp(progress, 0, 1);
+  const t = clamp(finiteOr(progress, 0), 0, 1);
   return (1 - Math.cos(Math.PI * t)) / 2;
 }
 
-function emptyMetrics({ pose }) {
+function calculateTokenRadii(width, height, gridSize) {
+  // sqrt(a) * sqrt(b) avoids an unnecessary width*height overflow.
+  const equivalentDiameter = Math.sqrt(width) * Math.sqrt(height);
+  const equivalentRadius = Math.max(equivalentDiameter * 0.5, Number.EPSILON);
+  const diameterGrids = clamp(equivalentDiameter / gridSize, 0.25, 8);
+  const compressedRadius = 0.5 * gridSize * Math.sqrt(diameterGrids);
+  return { equivalentRadius, compressedRadius };
+}
+
+function emptyMetrics({ pose, width, height }) {
+  const ground = pose.ground;
   return {
     flying: false,
+    height: { ...pose.heightCurve },
     token: {
       offsetX: 0,
       offsetY: 0,
-      centerX: pose.ground.x,
-      centerY: pose.ground.y
+      centerX: ground.x,
+      centerY: ground.y,
+      scale: 1,
+      alpha: 1,
+      bobAmplitude: 0,
+      labelOffsetX: 0,
+      labelOffsetY: 0
     },
     stand: {
-      topX: pose.ground.x,
-      topY: pose.ground.y,
-      baseX: pose.ground.x,
-      baseY: pose.ground.y,
+      topX: ground.x,
+      topY: ground.y,
+      baseX: ground.x,
+      baseY: ground.y,
       length: 0,
       width: 0,
-      opacity: 0
+      opacity: 0,
+      axisX: 0,
+      axisY: 1,
+      normalX: -1,
+      normalY: 0
     },
-    base: { x: pose.ground.x, y: pose.ground.y, radiusX: 0, radiusY: 0 },
+    connector: { x: ground.x, y: ground.y, length: 0, width: 0 },
+    base: {
+      x: ground.x,
+      y: ground.y,
+      radiusX: 0,
+      radiusY: 0,
+      thickness: 0,
+      pinLength: 0,
+      pinWidth: 0
+    },
     shadow: {
-      x: pose.ground.x,
-      y: pose.ground.y,
+      x: ground.x,
+      y: ground.y,
       radiusX: 0,
       radiusY: 0,
       alpha: 0,
-      contactX: pose.ground.x,
-      contactY: pose.ground.y,
+      contactX: ground.x,
+      contactY: ground.y,
       contactRadiusX: 0,
       contactRadiusY: 0,
+      contactCoreRadiusX: 0,
+      contactCoreRadiusY: 0,
       contactAlpha: 0
     },
     projection: {
-      startX: pose.ground.x,
-      startY: pose.ground.y,
-      endX: pose.ground.x,
-      endY: pose.ground.y,
+      startX: ground.x,
+      startY: ground.y,
+      endX: ground.x,
+      endY: ground.y,
       markerRadius: 0,
+      markerRadiusX: 0,
+      markerRadiusY: 0,
       dashLength: 0,
       gapLength: 0,
       lineWidth: 0,
-      alpha: 0
+      alpha: 0,
+      footprint: { x: 0, y: 0, width, height },
+      reticleAlpha: 0
     },
-    liftGlow: { x: pose.ground.x, y: pose.ground.y, radiusX: 0, radiusY: 0, alpha: 0 }
+    airAccent: { x: ground.x, y: ground.y, radiusX: 0, radiusY: 0, alpha: 0 },
+    liftGlow: { x: ground.x, y: ground.y, radiusX: 0, radiusY: 0, alpha: 0 }
   };
+}
+
+function finiteOr(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
 }
 
 function positiveOr(value, fallback) {
@@ -329,8 +484,7 @@ function boundedPositiveOr(value, fallback) {
 }
 
 function boundedGroundCoordinate(value, fallback, extent) {
-  const number = Number(value);
-  return clamp(Number.isFinite(number) ? number : fallback, 0, extent);
+  return clamp(finiteOr(value, fallback), 0, extent);
 }
 
 function radiusAtFixedCenter(center, desiredRadius, extent) {

@@ -1,5 +1,6 @@
-const PROJECTION_LINE_COLOR = 0x9ee9f5;
-const PROJECTION_MARKER_COLOR = 0xd8fbff;
+const PROJECTION_LINE_COLOR = 0x7faab2;
+const PROJECTION_MARKER_COLOR = 0xb9d8dc;
+const FOOTPRINT_COLOR = 0x9cc7cc;
 const MAX_DASH_SEGMENTS = 512;
 
 /** Draws a ground marker and a manually segmented PIXI projection line. */
@@ -10,10 +11,16 @@ export class ProjectionRenderer {
     graphics.zIndex = 10;
   }
 
-  render(metrics, enabled) {
+  render(metrics, enabled, {
+    standEnabled = false,
+    emphasized = false,
+    footprintShape = null
+  } = {}) {
     const graphics = this.graphics;
     graphics.clear();
-    graphics.visible = metrics.flying && enabled && (metrics.projection.alpha > 0);
+    graphics.visible = metrics.flying
+      && enabled
+      && ((metrics.projection.alpha > 0) || (metrics.projection.reticleAlpha > 0));
     if (!graphics.visible) return;
 
     const {
@@ -22,11 +29,31 @@ export class ProjectionRenderer {
       endX,
       endY,
       markerRadius,
+      markerRadiusX = markerRadius,
+      markerRadiusY = markerRadius,
       dashLength,
       gapLength,
       lineWidth,
-      alpha
+      alpha,
+      footprint,
+      reticleAlpha = 0
     } = metrics.projection;
+
+    // This is a visual cue only. Foundry's real border, hitArea and snapping
+    // remain on the Token placeable at the same ground footprint.
+    drawFootprintReticle(graphics, {
+      footprint,
+      footprintShape,
+      dashLength,
+      gapLength,
+      alpha: Math.min(0.42, reticleAlpha * (emphasized ? 3.8 : 1)),
+      width: emphasized ? Math.max(1.5, lineWidth * 0.9) : Math.max(1, lineWidth * 0.58)
+    });
+
+    // When the acrylic stand is present it already communicates the vertical
+    // axis. Keep the projection guide restrained so the two do not combine
+    // into the old bright cyan "laser rod".
+    const guideAlpha = alpha * (standEnabled ? 0.18 : 0.72);
     drawDashedLine(graphics, {
       startX,
       startY,
@@ -36,14 +63,66 @@ export class ProjectionRenderer {
       gapLength,
       width: lineWidth,
       color: PROJECTION_LINE_COLOR,
-      alpha: alpha * 0.86
+      alpha: guideAlpha
     });
 
-    graphics.lineStyle(Math.max(1.5, lineWidth), PROJECTION_MARKER_COLOR, Math.min(1, alpha * 1.12))
-      .drawCircle(endX, endY, markerRadius);
-    graphics.beginFill(PROJECTION_MARKER_COLOR, alpha * 0.14)
-      .drawCircle(endX, endY, markerRadius * 0.78)
+    const markerAlpha = alpha * (standEnabled ? 0.44 : 0.82);
+    graphics.lineStyle(Math.max(1.15, lineWidth * 0.82), PROJECTION_MARKER_COLOR, markerAlpha)
+      .drawEllipse(endX, endY, markerRadiusX, markerRadiusY);
+    graphics.beginFill(PROJECTION_MARKER_COLOR, markerAlpha * 0.09)
+      .drawEllipse(endX, endY, markerRadiusX * 0.78, markerRadiusY * 0.72)
       .endFill();
+  }
+}
+
+/** Draw either Foundry's local Token shape or a bounded dashed fallback. */
+export function drawFootprintReticle(graphics, {
+  footprint,
+  footprintShape,
+  dashLength,
+  gapLength,
+  alpha,
+  width
+}) {
+  if (!Number.isFinite(alpha) || (alpha <= 0) || !Number.isFinite(width) || (width <= 0)) return;
+  if (footprintShape && (typeof graphics.drawShape === "function")) {
+    try {
+      graphics.lineStyle(width, FOOTPRINT_COLOR, alpha).drawShape(footprintShape);
+      return;
+    } catch (_error) {
+      // A later module may expose a non-PIXI shape. Fall back without mutating
+      // it or Foundry's actual Token hit area.
+    }
+  }
+
+  const x = Number(footprint?.x);
+  const y = Number(footprint?.y);
+  const footprintWidth = Number(footprint?.width);
+  const footprintHeight = Number(footprint?.height);
+  if (![x, y, footprintWidth, footprintHeight].every(Number.isFinite)) return;
+  if ((footprintWidth <= 0) || (footprintHeight <= 0)) return;
+  const inset = Math.min(Math.max(width, 1), footprintWidth / 4, footprintHeight / 4);
+  const left = x + inset;
+  const top = y + inset;
+  const right = x + footprintWidth - inset;
+  const bottom = y + footprintHeight - inset;
+  for (const [startX, startY, endX, endY] of [
+    [left, top, right, top],
+    [right, top, right, bottom],
+    [right, bottom, left, bottom],
+    [left, bottom, left, top]
+  ]) {
+    drawDashedLine(graphics, {
+      startX,
+      startY,
+      endX,
+      endY,
+      dashLength,
+      gapLength,
+      width,
+      color: FOOTPRINT_COLOR,
+      alpha
+    });
   }
 }
 
