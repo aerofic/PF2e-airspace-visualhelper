@@ -271,7 +271,9 @@ export function calculateVisualMetrics({
       centerY: pose.tokenCenter.y,
       scale: perspectiveScale,
       alpha: alphaMultiplier,
-      bobAmplitude: takeoff * clamp(safeGridSize * (0.008 + (signal * 0.004)), 0.7, 1.4)
+      // A restrained 25% increase over the original motion keeps the model
+      // visibly airborne without turning the low-frequency float into jitter.
+      bobAmplitude: takeoff * clamp(safeGridSize * (0.01 + (signal * 0.005)), 0.875, 1.75)
     },
     stand: {
       topX: pose.standTop.x,

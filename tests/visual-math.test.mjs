@@ -505,3 +505,12 @@ test("ambient offset starts at rest and respects amplitude, period, and reduced 
     assert.ok(Math.abs(calculateAmbientOffset(elapsed, 0.3, 1.25, 2_400)) <= 1.25 + 1e-12);
   }
 });
+
+test("airborne bob amplitude is slightly stronger while remaining restrained", () => {
+  const low = calculateVisualMetrics({ ...base, elevation: 5 });
+  const high = calculateVisualMetrics({ ...base, elevation: 100 });
+
+  assert.ok(low.token.bobAmplitude >= 1, "a one-grid flight should have a readable float");
+  assert.ok(high.token.bobAmplitude > low.token.bobAmplitude);
+  assert.ok(high.token.bobAmplitude <= 1.75, "ambient motion must remain subtle");
+});

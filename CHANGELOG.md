@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.8 — Stronger Ambient Float
+
+- Increased the airborne Token bob amplitude by approximately 25% for a more readable hovering effect.
+- Preserved the existing low-frequency period, eased startup envelope, deterministic phase separation, and shared ticker.
+- Kept the motion bounded to 1.75 Canvas pixels and disabled under reduced-motion preferences.
+- Continued moving native artwork UI and elevation labels with the same ambient offset without rebuilding stand, shadow, or projection geometry.
+- Added regression coverage for the stronger but restrained elevation-responsive amplitude.
+
 ## 0.4.7 — Z Scatter Label Refresh Ordering
 
 - Fixed native elevation labels dropping back to the acrylic base when the Z Scatter toolbar toggle refreshed every Token.
