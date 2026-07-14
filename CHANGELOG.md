@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.3 — Solar Parallel-Light Projection
+
+- Replaced the 0.5.2 finite point-light magnification with a solar parallel-light model.
+- Keeps the Token texture's dense projected silhouette at exactly 1.0× its real Canvas footprint at every elevation; it no longer grows or shrinks with height.
+- Retains elevation-dependent penumbra expansion and gentle density falloff, matching the Sun's finite angular diameter without distorting the Token silhouette.
+- Preserves the readable low-altitude rod ordering and the default projection length of approximately one third of rules elevation.
+- Preserves the dense acrylic base, native elevation labels, HUD, Z Scatter compatibility, movement, targeting, and all PF2e rule boundaries.
+- Added regression coverage for fixed silhouette size across elevation while retaining monotonic softness, opacity, distance, and finite extreme-input bounds.
+
 ## 0.5.2 — Readable Low-Altitude Physical Projection
 
 - Increased the default upper-right rod projection from one tenth to approximately one third of rules elevation, preserving an exact zero origin and linear elevation response.

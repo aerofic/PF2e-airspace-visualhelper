@@ -279,8 +279,8 @@ test("swapping width and height preserves perspective and exposes only a bounded
         const overshootY = metrics.base.radiusY - (footprintHeight / 2);
         assert.ok(overshootX >= 3 && overshootX <= 7);
         assert.ok(overshootY >= 3 && overshootY <= 7);
-        assert.ok(metrics.shadow.radiusX <= Math.min((footprintWidth / 2) * (20 / 13), 400));
-        assert.ok(metrics.shadow.radiusY <= Math.min((footprintHeight / 2) * (20 / 13), 400));
+        assert.ok(metrics.shadow.radiusX <= Math.min(footprintWidth / 2, 400));
+        assert.ok(metrics.shadow.radiusY <= Math.min(footprintHeight / 2, 400));
         assert.ok(Math.hypot(
           metrics.shadow.x - metrics.base.x,
           metrics.shadow.y - metrics.base.y
@@ -290,20 +290,20 @@ test("swapping width and height preserves perspective and exposes only a bounded
   }
 });
 
-test("finite-light projection magnifies and softens the Token silhouette with height", () => {
+test("solar parallel light keeps true Token size while height softens and fades the cast", () => {
   const low = calculateVisualMetrics({ ...base, elevation: 10 });
   const high = calculateVisualMetrics({ ...base, elevation: 120 });
-  assertApproximatelyEqual(low.shadow.projectionScale, 60 / 59);
-  assertApproximatelyEqual(high.shadow.projectionScale, 1.25);
-  assert.ok(high.shadow.radiusX > low.shadow.radiusX);
-  assert.ok(high.shadow.radiusY > low.shadow.radiusY);
-  assert.ok(high.shadow.width > low.shadow.width);
-  assert.ok(high.shadow.height > low.shadow.height);
+  assert.equal(low.shadow.projectionScale, 1);
+  assert.equal(high.shadow.projectionScale, 1);
+  assert.equal(high.shadow.radiusX, low.shadow.radiusX);
+  assert.equal(high.shadow.radiusY, low.shadow.radiusY);
+  assert.equal(high.shadow.width, low.shadow.width);
+  assert.equal(high.shadow.height, low.shadow.height);
   assert.ok(high.shadow.softness > low.shadow.softness);
   assert.ok(high.shadow.alpha < low.shadow.alpha);
 });
 
-test("keeps a prominent perspective cast and projects the rod to it at tactical elevation", () => {
+test("keeps a prominent true-size solar cast and projects the rod to it at tactical elevation", () => {
   const metrics = calculateVisualMetrics({
     ...base,
     elevation: 60,
@@ -316,9 +316,9 @@ test("keeps a prominent perspective cast and projects the rod to it at tactical 
 
   assertApproximatelyEqual(distance, 400);
   assert.ok(metrics.shadow.alpha > 0.4, "cast shadow should survive height falloff");
-  assertApproximatelyEqual(metrics.shadow.projectionScale, 10 / 9);
-  assertApproximatelyEqual(metrics.shadow.width, 1000 / 9);
-  assertApproximatelyEqual(metrics.shadow.height, 1000 / 9);
+  assert.equal(metrics.shadow.projectionScale, 1);
+  assert.equal(metrics.shadow.width, 100);
+  assert.equal(metrics.shadow.height, 100);
   assert.deepEqual(
     [metrics.shadow.shaftStartX, metrics.shadow.shaftStartY],
     [metrics.base.x, metrics.base.y]
@@ -460,8 +460,8 @@ test("bounds the exposed plate rim, compact rod contact, and displaced cast shad
     metrics.shadow.x - metrics.base.x,
     metrics.shadow.y - metrics.base.y
   ) <= 1_000_000 + 1e-9);
-  assert.ok(metrics.shadow.radiusX <= (1000 / 13));
-  assert.ok(metrics.shadow.radiusY <= (1000 / 13));
+  assert.ok(metrics.shadow.radiusX <= 50);
+  assert.ok(metrics.shadow.radiusY <= 50);
   assert.equal(metrics.shadow.contactX, metrics.base.x);
   assert.ok(metrics.shadow.contactY >= metrics.base.y);
   assert.ok(metrics.shadow.contactRadiusX < metrics.base.radiusX);

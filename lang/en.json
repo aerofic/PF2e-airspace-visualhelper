@@ -10,7 +10,7 @@
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableStand.name": "Enable Top-Down Acrylic Base",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableStand.hint": "Render a concentric transparent flight-plate rim, refractive highlights, and the circular end of the camera-aligned support rod.",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableShadow.name": "Enable Height Shadow",
-  "PF2E_FLYING_VISUAL_HELPER.Settings.enableShadow.hint": "Project a readable acrylic rod and the Token's perspective-scaled texture silhouette toward the upper-right; default length is about one third of elevation.",
+  "PF2E_FLYING_VISUAL_HELPER.Settings.enableShadow.hint": "Project a readable acrylic rod and true-size Token texture silhouette toward the upper-right using solar parallel-light behavior; default length is about one third of elevation.",
   "PF2E_FLYING_VISUAL_HELPER.Settings.standOpacity.name": "Stand Opacity",
   "PF2E_FLYING_VISUAL_HELPER.Settings.standOpacity.hint": "Adjust the top-down acrylic rim, rod end, and interaction X-ray opacity.",
   "PF2E_FLYING_VISUAL_HELPER.Settings.shadowOpacity.name": "Shadow Opacity",

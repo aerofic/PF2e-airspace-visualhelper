@@ -24,11 +24,6 @@ const MAX_HEIGHT_STEPS = 1_000_000;
 // elevation. This preserves a readable 10 ft rod without exaggerating it into
 // the former side-view stand.
 const SHADOW_PROJECTION_PER_STEP = 1 / 3;
-// Model a high, finite key light for silhouette magnification. Keeping the
-// source 120 elevation steps above the plane produces subtle low-altitude
-// growth and a readable 20% expansion at 100 ft on a 5 ft grid.
-const VIRTUAL_LIGHT_HEIGHT_STEPS = 120;
-const MAX_LIGHT_HEIGHT_RATIO = 0.35;
 const SHADOW_DIRECTION_X = Math.sqrt(3) / 2;
 const SHADOW_DIRECTION_Y = -0.5;
 
@@ -199,19 +194,17 @@ export function calculateVisualMetrics({
   );
   const shadowX = pose.ground.x + (desiredShadowDistance * SHADOW_DIRECTION_X);
   const shadowY = pose.ground.y + (desiredShadowDistance * SHADOW_DIRECTION_Y);
-  const lightHeightRatio = clamp(
-    pose.heightCurve.steps / VIRTUAL_LIGHT_HEIGHT_STEPS,
-    0,
-    MAX_LIGHT_HEIGHT_RATIO
-  );
-  const shadowProjectionScale = 1 / (1 - lightHeightRatio);
+  // Sunlight is effectively parallel at tactical-map scale. The Token's dark
+  // projected silhouette therefore keeps its real footprint size at every
+  // elevation; only travel, penumbra spread, and density change with height.
+  const shadowProjectionScale = 1;
   const shadowSoftness = clamp(0.025 + (pose.heightCurve.steps * 0.0075), 0.025, 0.24);
-  // A finite elevated light magnifies the silhouette while spreading the same
-  // light loss over a larger area. The square-root falloff stays legible on a
-  // textured map without making a high shadow as dense as a low one.
-  const shadowFalloff = (0.96 - (0.1 * signal)) / Math.sqrt(shadowProjectionScale);
-  const shadowWidth = Math.min(width * shadowProjectionScale, safeGridSize * 8);
-  const shadowHeight = Math.min(height * shadowProjectionScale, safeGridSize * 8);
+  // The Sun's finite angular diameter broadens the penumbra with receiver
+  // distance. Fade the dense core gently while its exact alpha silhouette
+  // remains one-to-one with the Token texture.
+  const shadowFalloff = 0.96 - (0.1 * signal);
+  const shadowWidth = Math.min(width, safeGridSize * 8);
+  const shadowHeight = Math.min(height, safeGridSize * 8);
   const shadowRadiusX = shadowWidth * 0.5;
   const shadowRadiusY = shadowHeight * 0.5;
   // The acrylic rod has a fixed physical diameter. Elevation changes the

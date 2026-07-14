@@ -10,7 +10,7 @@
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableStand.name": "启用俯视透明底座",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableStand.hint": "绘制与 Token 同心的透明飞行底盘外缘、折射高光，以及与镜头轴重合的支杆圆形端面。",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableShadow.name": "启用高度阴影",
-  "PF2E_FLYING_VISUAL_HELPER.Settings.enableShadow.hint": "向右上投射清晰的亚克力支杆与按透视缩放的 Token 真实纹理轮廓，默认长度约为 elevation 的三分之一。",
+  "PF2E_FLYING_VISUAL_HELPER.Settings.enableShadow.hint": "使用太阳平行光逻辑向右上投射清晰的亚克力支杆与保持真实尺寸的 Token 纹理轮廓，默认长度约为 elevation 的三分之一。",
   "PF2E_FLYING_VISUAL_HELPER.Settings.standOpacity.name": "支架透明度",
   "PF2E_FLYING_VISUAL_HELPER.Settings.standOpacity.hint": "调整俯视亚克力外缘、支杆端面与交互 X-Ray 提示的透明度。",
   "PF2E_FLYING_VISUAL_HELPER.Settings.shadowOpacity.name": "阴影透明度",
