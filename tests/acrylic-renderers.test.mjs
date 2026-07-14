@@ -48,15 +48,7 @@ const metrics = {
     pinLength: 9,
     pinWidth: 4
   },
-  connector: {
-    x: 31,
-    y: -54,
-    length: 13,
-    width: 8,
-    clampSpan: 28,
-    clampDepth: 5,
-    jawLength: 8
-  },
+  connector: { x: 31, y: -54, length: 13, width: 8 },
   airAccent: { x: 30, y: -60, radiusX: 18, radiusY: 4, alpha: 0.08 },
   shadow: {
     x: 59,
@@ -90,8 +82,7 @@ test("layers a restrained acrylic body, plate, pin, connector, and SCREEN highli
   renderer.render(metrics, true);
   assert.equal(body.visible, true);
   assert.equal(specular.visible, true);
-  const bodyPolygons = body.commands.filter(command => command[0] === "drawPolygon");
-  assert.ok(bodyPolygons.length >= 6, "shaft, pins, sleeve, crossbar, and two clamp jaws are drawn");
+  assert.ok(body.commands.filter(command => command[0] === "drawPolygon").length >= 3);
   assert.ok(body.commands.filter(command => command[0] === "drawEllipse").length >= 2);
   assert.ok(specular.commands.filter(command => command[0] === "drawEllipse").length >= 3);
   assert.equal(
@@ -105,16 +96,6 @@ test("layers a restrained acrylic body, plate, pin, connector, and SCREEN highli
   assert.ok(lineWidths.length >= 5);
   assert.ok(Math.max(...lineWidths) <= 1.5, "no wide laser-like stroke is emitted");
   assert.equal(lineWidths.at(-1), 0, "the air accent must not inherit a bright shaft outline");
-  assert.ok(
-    Math.max(...body.commands
-      .filter(command => command[0] === "beginFill")
-      .map(command => command[2])) >= 0.19,
-    "acrylic plate and clamp should have visible physical density"
-  );
-  assert.ok(
-    Math.max(...bodyPolygons.map(command => polygonWidth(command[1]))) >= 27,
-    "top clamp crossbar should be visibly wider than the shaft"
-  );
 
   renderer.render(metrics, false);
   assert.equal(body.visible, false);
@@ -122,11 +103,6 @@ test("layers a restrained acrylic body, plate, pin, connector, and SCREEN highli
   assert.deepEqual(body.commands, []);
   assert.deepEqual(specular.commands, []);
 });
-
-function polygonWidth(points) {
-  const xs = points.filter((_value, index) => index % 2 === 0);
-  return Math.max(...xs) - Math.min(...xs);
-}
 
 test("uses three height layers and two contact layers without filters", () => {
   const graphics = new FakeGraphics();

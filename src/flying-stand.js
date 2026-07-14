@@ -169,19 +169,19 @@ function drawBase(body, specular, base, { opacity, width }) {
     Math.max(0, radiusY * 0.65)
   );
 
-  // A visibly denser underside and top surface give the plate physical
-  // presence while preserving enough transparency to read the map beneath.
-  body.beginFill(ACRYLIC_UNDERSIDE_COLOR, Math.min(0.26, opacity * 0.38))
+  // Darker underside plus a very pale top surface makes the plate feel thick
+  // without putting an opaque disk over the map texture.
+  body.beginFill(ACRYLIC_UNDERSIDE_COLOR, Math.min(0.12, opacity * 0.16))
     .drawEllipse(x, y + thickness, radiusX, radiusY)
     .endFill();
-  body.beginFill(ACRYLIC_BODY_COLOR, Math.min(0.22, opacity * 0.34))
+  body.beginFill(ACRYLIC_BODY_COLOR, Math.min(0.1, opacity * 0.14))
     .drawEllipse(x, y, radiusX, radiusY)
     .endFill();
 
   specular.lineStyle(
     clamp(width * 0.22, 1, 1.5),
     ACRYLIC_EDGE_COLOR,
-    Math.min(0.52, opacity * 0.82)
+    Math.min(0.38, opacity * 0.65)
   ).drawEllipse(x, y + (thickness * 0.32), radiusX, radiusY);
   specular.lineStyle(
     clamp(width * 0.13, 0.75, 1),
@@ -272,96 +272,6 @@ function drawTopConnector(body, specular, connector, data) {
     Math.min(0.46, opacity * 0.72)
   ).moveTo(ax + (normalX * connectorWidth * 0.38), ay + (normalY * connectorWidth * 0.38))
     .lineTo(bx + (normalX * connectorWidth * 0.38), by + (normalY * connectorWidth * 0.38));
-
-  drawTopClamp(body, specular, connector, {
-    // The base-facing sleeve end sits at the Token's lower rim. Building the
-    // crossbar here leaves it visible while the jaws turn back into the art.
-    anchorX: bx,
-    anchorY: by,
-    unitX,
-    unitY,
-    normalX,
-    normalY,
-    connectorWidth,
-    opacity,
-    width
-  });
-}
-
-/** Draw a crossbar and two short jaws which visibly cradle the Token rim. */
-function drawTopClamp(body, specular, connector, data) {
-  const {
-    anchorX,
-    anchorY,
-    unitX,
-    unitY,
-    normalX,
-    normalY,
-    connectorWidth,
-    opacity,
-    width
-  } = data;
-  const span = clamp(
-    finiteOr(connector?.clampSpan, connectorWidth * 3.2),
-    connectorWidth * 2.4,
-    connectorWidth * 6
-  );
-  const depth = clamp(
-    finiteOr(connector?.clampDepth, width * 0.85),
-    Math.max(2, width * 0.55),
-    Math.max(3, connectorWidth * 0.9)
-  );
-  const jawLength = clamp(
-    finiteOr(connector?.jawLength, width * 1.3),
-    depth,
-    Math.max(depth, connectorWidth * 1.35)
-  );
-  const halfSpan = span * 0.5;
-  const leftX = anchorX - (normalX * halfSpan);
-  const leftY = anchorY - (normalY * halfSpan);
-  const rightX = anchorX + (normalX * halfSpan);
-  const rightY = anchorY + (normalY * halfSpan);
-  const jawHalfWidth = clamp(depth * 0.32, 0.9, 1.8);
-
-  // Crossbar: its broad axis is perpendicular to the acrylic shaft.
-  drawFilledPolygon(body, orientedQuad({
-    ax: leftX,
-    ay: leftY,
-    bx: rightX,
-    by: rightY,
-    normalX: unitX,
-    normalY: unitY,
-    halfWidth: depth * 0.5
-  }), ACRYLIC_BODY_COLOR, Math.min(0.3, opacity * 0.48));
-
-  // Jaws extend a few pixels into the model rim. The Token art is sorted above
-  // this stand, naturally hiding their tips and making the clamp look seated.
-  for (const side of [-1, 1]) {
-    const jawBaseX = anchorX + (normalX * halfSpan * side);
-    const jawBaseY = anchorY + (normalY * halfSpan * side);
-    const jawTipX = jawBaseX - (unitX * jawLength);
-    const jawTipY = jawBaseY - (unitY * jawLength);
-    drawFilledPolygon(body, orientedQuad({
-      ax: jawBaseX,
-      ay: jawBaseY,
-      bx: jawTipX,
-      by: jawTipY,
-      normalX,
-      normalY,
-      halfWidth: jawHalfWidth
-    }), ACRYLIC_EDGE_COLOR, Math.min(0.34, opacity * 0.54));
-    specular.lineStyle(
-      clamp(width * 0.15, 0.8, 1.2),
-      ACRYLIC_HIGHLIGHT_COLOR,
-      Math.min(0.56, opacity * 0.82)
-    ).moveTo(jawBaseX, jawBaseY).lineTo(jawTipX, jawTipY);
-  }
-
-  specular.lineStyle(
-    clamp(width * 0.18, 0.9, 1.3),
-    ACRYLIC_EDGE_COLOR,
-    Math.min(0.52, opacity * 0.78)
-  ).moveTo(leftX, leftY).lineTo(rightX, rightY);
 }
 
 function drawAirAccent(graphics, accent, standOpacity) {

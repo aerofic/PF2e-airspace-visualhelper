@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.12 — Remove Top Clamp Experiment
+
+- Removed the complete 0.4.11 crossbar-and-jaw clamp experiment after in-game evaluation showed an unnatural rectangular bracket beneath circular Token art.
+- Restored the original compact top connector sleeve used by 0.4.10.
+- Restored the original 0.4.10 acrylic plate top, underside, and refractive-edge opacity treatment.
+- Removed all clamp-only metrics, renderer geometry, documentation claims, and regression assertions.
+- Kept the stronger 0.4.10 height-shadow system and every unrelated visual, HUD, movement-label, and Z Scatter improvement unchanged.
+
 ## 0.4.11 — Denser Base and Physical Token Clamp
 
 - Increased the acrylic plate's top and underside material density so the fixed ground base has a clearer physical presence while the map remains visible beneath it.
