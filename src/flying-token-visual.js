@@ -2,6 +2,7 @@ import { FlyingStand } from "./flying-stand.js";
 import { ProjectionRenderer } from "./projection-renderer.js";
 import { ShadowRenderer } from "./shadow-renderer.js";
 import { TokenLiftRenderer } from "./token-lift-renderer.js";
+import { ZScatterCompatibility } from "./z-scatter-compatibility.js";
 import {
   calculateAmbientOffset,
   calculateAnimationDuration,
@@ -13,6 +14,7 @@ import { VISUAL_EPSILON } from "./constants.js";
 
 const MIN_ANIMATION_FRAME_MS = 1000 / 30;
 const MIN_AMBIENT_FRAME_MS = 1000 / 24;
+const MIN_COMPATIBILITY_FRAME_MS = 1000 / 10;
 
 /**
  * Reusable PIXI state for one Token. It owns display objects only and never
@@ -34,6 +36,7 @@ export class FlyingTokenVisual {
     this.labelAlpha = 1;
     this.lastAnimatedRenderAt = 0;
     this.lastAmbientApplyAt = Number.NEGATIVE_INFINITY;
+    this.lastCompatibilityApplyAt = Number.NEGATIVE_INFINITY;
     this.ambientOffsetY = 0;
     this.ambientStartedAt = performance.now();
     const motionSeed = stableStringHash(token.id ?? token.document?.id ?? "flying-token");
@@ -43,6 +46,7 @@ export class FlyingTokenVisual {
     this.metrics = null;
     this.lastProjectionEmphasized = null;
     this.liftEnabled = false;
+    this.zScatterCompatibility = new ZScatterCompatibility(token);
 
     this.container = new PIXI.Container();
     this.container.name = "pf2e-flying-visual-helper";
@@ -68,6 +72,7 @@ export class FlyingTokenVisual {
     this.tokenLift = new TokenLiftRenderer(token);
 
     parent.addChild(this.container);
+    this.#syncCompatibility({ enabled: this.displayElevation > 0 });
     this.#syncPosition();
     this.#captureNativeTooltip();
     this.render();
@@ -79,7 +84,7 @@ export class FlyingTokenVisual {
 
   /** Whether the shared Scene ticker still has useful work for this Token. */
   get requiresTicker() {
-    return this.isAnimating || this.needsAmbientMotion;
+    return this.isAnimating || this.needsAmbientMotion || this.needsCompatibilityMonitoring;
   }
 
   get needsAmbientMotion() {
@@ -89,6 +94,12 @@ export class FlyingTokenVisual {
       && !!this.metrics?.flying
       && !!this.container.visible
       && ((this.metrics?.token?.bobAmplitude ?? 0) > VISUAL_EPSILON);
+  }
+
+  get needsCompatibilityMonitoring() {
+    return this.liftEnabled
+      && !!this.container.visible
+      && (this.zScatterCompatibility.available || this.zScatterCompatibility.state.active);
   }
 
   get destroyed() {
@@ -107,6 +118,7 @@ export class FlyingTokenVisual {
     if (!this.container.destroyed && !this.parent.destroyed && (this.container.parent !== this.parent)) {
       this.parent.addChild(this.container);
     }
+    this.#syncCompatibility({ enabled: this.liftEnabled || (this.displayElevation > 0) });
     this.#syncPosition();
     this.#captureNativeTooltip();
     this.render();
@@ -230,6 +242,14 @@ export class FlyingTokenVisual {
       this.#renderAnimationFrame(now, { force: progress >= 1 });
     }
 
+    if (this.needsCompatibilityMonitoring
+      && ((now - this.lastCompatibilityApplyAt) >= MIN_COMPATIBILITY_FRAME_MS)) {
+      this.#syncCompatibility({ enabled: true });
+      this.#syncPosition();
+      this.tokenLift.applyAmbient(this.ambientOffsetY, this.zScatterCompatibility.state);
+      this.lastCompatibilityApplyAt = now;
+    }
+
     if (this.needsAmbientMotion && ((now - this.lastAmbientApplyAt) >= MIN_AMBIENT_FRAME_MS)) {
       this.ambientOffsetY = calculateAmbientOffset(
         now - this.ambientStartedAt,
@@ -238,7 +258,9 @@ export class FlyingTokenVisual {
         this.ambientPeriod,
         this.reducedMotion
       );
-      this.tokenLift.applyAmbient(this.ambientOffsetY);
+      this.#syncCompatibility({ enabled: true });
+      this.#syncPosition();
+      this.tokenLift.applyAmbient(this.ambientOffsetY, this.zScatterCompatibility.state);
       this.lastAmbientApplyAt = now;
     } else if (!this.needsAmbientMotion && (Math.abs(this.ambientOffsetY) > VISUAL_EPSILON)) {
       this.#resetAmbientMotion({ apply: true });
@@ -248,6 +270,7 @@ export class FlyingTokenVisual {
 
   /** Handle only render flags which affect geometry or the native tooltip. */
   onRefresh(flags = {}) {
+    this.#syncCompatibility({ enabled: this.liftEnabled || (this.displayElevation > 0) });
     const positionRefreshed = flags.refreshPosition || flags.refreshTransform || flags.redraw;
     const uiBaseRefreshed = flags.refreshSize || flags.refreshTransform || flags.redraw;
     const uiRetainsOwnedOffset = flags.refreshTooltip && !uiBaseRefreshed;
@@ -278,10 +301,12 @@ export class FlyingTokenVisual {
       && !meshAlphaBaseRefreshed
       && !uiBaseRefreshed
       && !uiRetainsOwnedOffset
+      && !this.zScatterCompatibility.state.supported
       && this.liftEnabled
       && this.#shouldEnableTokenLift();
-    if (canUsePositionFastPath) this.tokenLift.rebaseMeshPosition(this.ambientOffsetY);
-    else {
+    if (canUsePositionFastPath) {
+      this.tokenLift.rebaseMeshPosition(this.ambientOffsetY, this.zScatterCompatibility.state);
+    } else {
       this.#applyTokenLift({
         meshBaseRefreshed: positionRefreshed,
         meshScaleBaseRefreshed,
@@ -301,6 +326,7 @@ export class FlyingTokenVisual {
     uiRetainsOwnedOffset = false
   } = {}) {
     if (this.container.destroyed || this.token.destroyed) return;
+    this.#syncCompatibility({ enabled: (this.displayElevation > 0) || (this.targetElevation > 0) });
     this.#syncPosition();
     const size = this.token.document.getSize();
     const ground = this.#getLocalGround(size);
@@ -318,6 +344,8 @@ export class FlyingTokenVisual {
       shadowDistanceMultiplier: this.settings.shadowDistanceMultiplier
     });
     this.metrics = metrics;
+    this.#syncCompatibility({ enabled: this.#shouldEnableTokenLift(metrics) });
+    this.#syncPosition();
 
     this.#updateVisibility();
     this.#renderGeometry();
@@ -338,6 +366,7 @@ export class FlyingTokenVisual {
     this.ambientOffsetY = 0;
     this.liftEnabled = false;
     this.tokenLift.restore();
+    this.zScatterCompatibility.destroy();
     this.#restoreNativeTooltip();
     if (!this.container.destroyed) {
       this.container.removeFromParent();
@@ -437,7 +466,8 @@ export class FlyingTokenVisual {
       meshScaleBaseRefreshed,
       meshAlphaBaseRefreshed,
       uiBaseRefreshed,
-      uiRetainsOwnedOffset
+      uiRetainsOwnedOffset,
+      externalLayout: this.zScatterCompatibility.state
     });
     this.liftEnabled = enabled;
   }
@@ -485,7 +515,10 @@ export class FlyingTokenVisual {
     const hadOffset = Math.abs(this.ambientOffsetY) > VISUAL_EPSILON;
     this.ambientOffsetY = 0;
     this.lastAmbientApplyAt = Number.NEGATIVE_INFINITY;
-    if (apply && hadOffset) this.tokenLift.applyAmbient(0);
+    if (apply && hadOffset) {
+      this.#syncCompatibility({ enabled: this.liftEnabled });
+      this.tokenLift.applyAmbient(0, this.zScatterCompatibility.state);
+    }
   }
 
   #hasVisibleGeometry(metrics) {
@@ -497,8 +530,11 @@ export class FlyingTokenVisual {
 
   #syncPosition() {
     if (this.container.destroyed) return;
-    const x = Number(this.token.position?.x ?? this.token.document?.x) || 0;
-    const y = Number(this.token.position?.y ?? this.token.document?.y) || 0;
+    const layout = this.zScatterCompatibility.state;
+    const scatterX = layout.supported ? layout.offsetX : 0;
+    const scatterY = layout.supported ? layout.offsetY : 0;
+    const x = (Number(this.token.position?.x ?? this.token.document?.x) || 0) + scatterX;
+    const y = (Number(this.token.position?.y ?? this.token.document?.y) || 0) + scatterY;
     if (this.container.position?.set) this.container.position.set(x, y);
     else {
       this.container.x = x;
@@ -511,10 +547,26 @@ export class FlyingTokenVisual {
     const centerY = Number(this.token.center?.y);
     const originX = Number(this.container.position?.x ?? this.container.x);
     const originY = Number(this.container.position?.y ?? this.container.y);
+    const layout = this.zScatterCompatibility.state;
+    const scatterX = layout.supported ? layout.offsetX : 0;
+    const scatterY = layout.supported ? layout.offsetY : 0;
     return {
-      x: Number.isFinite(centerX) && Number.isFinite(originX) ? centerX - originX : size.width / 2,
-      y: Number.isFinite(centerY) && Number.isFinite(originY) ? centerY - originY : size.height / 2
+      x: Number.isFinite(centerX) && Number.isFinite(originX)
+        ? centerX + scatterX - originX
+        : size.width / 2,
+      y: Number.isFinite(centerY) && Number.isFinite(originY)
+        ? centerY + scatterY - originY
+        : size.height / 2
     };
+  }
+
+  #syncCompatibility({ enabled = this.liftEnabled } = {}) {
+    const tokenMetrics = this.metrics?.token;
+    return this.zScatterCompatibility.sync({
+      enabled,
+      liftX: tokenMetrics?.offsetX ?? 0,
+      liftY: (tokenMetrics?.offsetY ?? 0) + this.ambientOffsetY
+    });
   }
 }
 

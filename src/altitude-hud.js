@@ -23,12 +23,21 @@ export const ALTITUDE_HUD_DEFAULT_POSITION = Object.freeze({
   top: 52
 });
 
-/** The proportional axis and Token details are created only on demand. */
+/** Minimum expanded fallback; live content replaces these dimensions. */
 export const ALTITUDE_HUD_EXPANDED_POSITION = Object.freeze({
-  width: 520,
-  height: 260,
+  width: 360,
+  height: 73,
   top: 52
 });
+
+const HUD_HEADER_HEIGHT = 32;
+const HUD_DETAILS_GAP = 3;
+const HUD_DETAILS_BORDER = 2;
+const HUD_RELATIONS_HEIGHT = 44;
+const HUD_EMPTY_HEIGHT = 44;
+const HUD_LIST_COLUMNS = 2;
+const HUD_LIST_ROW_HEIGHT = 31;
+const HUD_LIST_PADDING = 10;
 
 /** ApplicationV2 airspace HUD for the currently viewed Scene. */
 export class AltitudeHud extends HandlebarsApplicationMixin(ApplicationV2) {
@@ -55,8 +64,7 @@ export class AltitudeHud extends HandlebarsApplicationMixin(ApplicationV2) {
 
   static PARTS = {
     main: {
-      template: "modules/pf2e-flying-visual-helper/templates/altitude-hud.hbs",
-      scrollable: [".airspace-axis-scroll", ".airspace-compact-list"]
+      template: "modules/pf2e-flying-visual-helper/templates/altitude-hud.hbs"
     }
   };
 
@@ -84,10 +92,17 @@ export class AltitudeHud extends HandlebarsApplicationMixin(ApplicationV2) {
       }))
       : [];
 
-    // The proportional axis can be several hundred DOM nodes in pathological
-    // Scenes. Do not even calculate it while the 32 px navigation bar is shut.
+    // The relative axis is created only while expanded. Every exact Token
+    // elevation stays in its node; the axis pixels express ordering, not feet.
     const showHeightAxis = this.#expanded && settings.enableHeightAxis;
     const axis = showHeightAxis ? buildAltitudeAxis(filteredEntries) : null;
+    const hudPosition = this.#expanded
+      ? calculateExpandedHudPosition({
+        axis,
+        entryCount: filteredEntries.length,
+        hasSelected: !!selected
+      })
+      : ALTITUDE_HUD_DEFAULT_POSITION;
 
     const filterIcons = {
       [HUD_FILTERS.ALL]: "fa-layer-group",
@@ -114,9 +129,12 @@ export class AltitudeHud extends HandlebarsApplicationMixin(ApplicationV2) {
         ...axis,
         ticks: axis.ticks.map(tick => ({
           ...tick,
-          label: tick.major ? `${formatFeet(tick.elevation)} ${unit}` : ""
+          // Exact values already live in Token nodes. Duplicating absolute
+          // ruler labels would make the relative axis look rules-precise.
+          label: ""
         }))
       } : null,
+      hudPosition,
       summaryLabel: summary.label,
       summaryAccessibleLabel: summary.accessibleLabel,
       summaryTooltipText: summary.tooltipText,
@@ -137,13 +155,12 @@ export class AltitudeHud extends HandlebarsApplicationMixin(ApplicationV2) {
 
   _onRender(context, options) {
     super._onRender(context, options);
+    this.#setModePosition(context.hudPosition ?? ALTITUDE_HUD_DEFAULT_POSITION);
     this.#listenerAbortController?.abort();
     this.#listenerAbortController = new AbortController();
     const { signal } = this.#listenerAbortController;
     const dragHandle = this.parts.main?.querySelector(".airspace-drag-handle");
     if (dragHandle) activateHudDragging(dragHandle, this, { signal });
-    const viewport = this.parts.main?.querySelector(".airspace-axis-scroll");
-    if (viewport) activateDragScrolling(viewport, { signal });
   }
 
   _preClose(options) {
@@ -194,7 +211,9 @@ export class AltitudeHud extends HandlebarsApplicationMixin(ApplicationV2) {
 
   #setModePosition(modePosition) {
     const currentWidth = Number(this.position?.width);
+    const currentHeight = Number(this.position?.height);
     const currentLeft = Number(this.position?.left);
+    if ((currentWidth === modePosition.width) && (currentHeight === modePosition.height)) return;
     const nextPosition = {
       width: modePosition.width,
       height: modePosition.height
@@ -207,12 +226,25 @@ export class AltitudeHud extends HandlebarsApplicationMixin(ApplicationV2) {
     this.setPosition(nextPosition);
   }
 
+  #measureCurrentModePosition() {
+    if (!this.#expanded) return ALTITUDE_HUD_DEFAULT_POSITION;
+    const settings = readSettings();
+    const unit = getSceneDistanceUnit();
+    const allEntries = collectVisibleTokenEntries({ unit });
+    const filteredEntries = sortAltitudeEntries(filterAltitudeEntries(allEntries, this.#filter));
+    const axis = settings.enableHeightAxis ? buildAltitudeAxis(filteredEntries) : null;
+    const selected = resolveSelectedEntry(allEntries, this.#selectedTokenId);
+    return calculateExpandedHudPosition({
+      axis,
+      entryCount: filteredEntries.length,
+      hasSelected: !!selected
+    });
+  }
+
   static async #onToggleDetails(event) {
     event.preventDefault();
     this.#expanded = !this.#expanded;
-    this.#setModePosition(this.#expanded
-      ? ALTITUDE_HUD_EXPANDED_POSITION
-      : ALTITUDE_HUD_DEFAULT_POSITION);
+    this.#setModePosition(this.#measureCurrentModePosition());
     await this.render({ parts: ["main"] });
     this.parts?.main
       ?.querySelector("#pf2e-fvh-airspace-summary")
@@ -229,6 +261,7 @@ export class AltitudeHud extends HandlebarsApplicationMixin(ApplicationV2) {
     const filter = target.dataset.filter;
     if (!Object.values(HUD_FILTERS).includes(filter) || (filter === this.#filter)) return;
     this.#filter = filter;
+    if (this.#expanded) this.#setModePosition(this.#measureCurrentModePosition());
     await this.render({ parts: ["main"] });
     this.parts?.main
       ?.querySelector(`[data-action="setFilter"][data-filter="${filter}"]`)
@@ -264,6 +297,38 @@ export class AltitudeHud extends HandlebarsApplicationMixin(ApplicationV2) {
       duration: PING_DURATION_MS
     });
   }
+}
+
+/**
+ * Size the expanded HUD from its complete content without a viewport cap.
+ * The compact bar remains a stable 360×32; only the requested detail surface
+ * grows with relative altitude levels or list rows.
+ */
+export function calculateExpandedHudPosition({
+  axis = null,
+  entryCount = 0,
+  hasSelected = false
+} = {}) {
+  const count = Math.max(0, Math.floor(Number(entryCount) || 0));
+  const axisHeight = Number(axis?.height);
+  const axisWidth = Number(axis?.width);
+  const contentHeight = Number.isFinite(axisHeight)
+    ? Math.max(0, axisHeight)
+    : count > 0
+      ? HUD_LIST_PADDING + (Math.ceil(count / HUD_LIST_COLUMNS) * HUD_LIST_ROW_HEIGHT)
+      : HUD_EMPTY_HEIGHT;
+  return {
+    width: Math.max(
+      ALTITUDE_HUD_EXPANDED_POSITION.width,
+      Number.isFinite(axisWidth) ? Math.max(0, axisWidth) : 0
+    ),
+    height: HUD_HEADER_HEIGHT
+      + HUD_DETAILS_GAP
+      + HUD_DETAILS_BORDER
+      + contentHeight
+      + (hasSelected ? HUD_RELATIONS_HEIGHT : 0),
+    top: ALTITUDE_HUD_EXPANDED_POSITION.top
+  };
 }
 
 /** Build privacy-filtered display rows from rendered Token placeables only. */
@@ -407,43 +472,6 @@ function getPf2eFeetUnit() {
   const key = "PF2E.TravelSpeed.FeetAcronym";
   const localized = game.i18n.localize(key);
   return localized === key ? "ft" : localized;
-}
-
-function activateDragScrolling(viewport, { signal } = {}) {
-  let dragging = false;
-  let pointerId = null;
-  let originX = 0;
-  let originY = 0;
-  let originScrollLeft = 0;
-  let originScrollTop = 0;
-
-  viewport.addEventListener("pointerdown", event => {
-    if ((event.button !== 0) || event.target.closest("[data-action]")) return;
-    dragging = true;
-    pointerId = event.pointerId;
-    originX = event.clientX;
-    originY = event.clientY;
-    originScrollLeft = viewport.scrollLeft;
-    originScrollTop = viewport.scrollTop;
-    viewport.setPointerCapture(pointerId);
-    viewport.classList.add("is-dragging");
-  }, { signal });
-
-  viewport.addEventListener("pointermove", event => {
-    if (!dragging || (event.pointerId !== pointerId)) return;
-    viewport.scrollLeft = originScrollLeft - (event.clientX - originX);
-    viewport.scrollTop = originScrollTop - (event.clientY - originY);
-  }, { signal });
-
-  const stopDragging = event => {
-    if (!dragging || (event.pointerId !== pointerId)) return;
-    dragging = false;
-    if (viewport.hasPointerCapture(pointerId)) viewport.releasePointerCapture(pointerId);
-    pointerId = null;
-    viewport.classList.remove("is-dragging");
-  };
-  viewport.addEventListener("pointerup", stopDragging, { signal });
-  viewport.addEventListener("pointercancel", stopDragging, { signal });
 }
 
 /** Pointer-captured drag and keyboard movement for the frameless HUD. */

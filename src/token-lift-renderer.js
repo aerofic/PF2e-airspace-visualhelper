@@ -45,7 +45,8 @@ export class TokenLiftRenderer {
     meshScaleBaseRefreshed = false,
     meshAlphaBaseRefreshed = false,
     uiBaseRefreshed = false,
-    uiRetainsOwnedOffset = false
+    uiRetainsOwnedOffset = false,
+    externalLayout = null
   } = {}) {
     this.#enabled = !!enabled;
     this.#offsetX = enabled ? finiteOrZero(offsetX) : 0;
@@ -59,22 +60,31 @@ export class TokenLiftRenderer {
       mesh,
       this.#offsetX,
       this.#offsetY + ambientY,
-      meshBaseRefreshed
+      meshBaseRefreshed,
+      false,
+      externalLayout?.bases?.mesh ?? null
     );
     this.#meshScaleTarget.apply(mesh, enabled ? scale : 1, meshScaleBaseRefreshed);
     this.#meshAlphaTarget.apply(mesh, enabled ? alpha : 1, meshAlphaBaseRefreshed);
     for (const [key, target] of this.#uiTargets) {
       const isNativeElevationLabel = (key === "tooltip") || (key === "levelIndicator");
+      const ownsExternalOffset = externalLayout?.supported && (key === "levelIndicator");
       target.applyXY(
         this.#token?.[key],
-        this.#offsetX + (isNativeElevationLabel ? this.#labelOffsetX : 0),
-        this.#offsetY + ambientY + (isNativeElevationLabel ? this.#labelOffsetY : 0),
+        this.#offsetX
+          + (isNativeElevationLabel ? this.#labelOffsetX : 0)
+          + (ownsExternalOffset ? externalLayout.offsetX : 0),
+        this.#offsetY
+          + ambientY
+          + (isNativeElevationLabel ? this.#labelOffsetY : 0)
+          + (ownsExternalOffset ? externalLayout.offsetY : 0),
         // v14 _refreshSize resets these three container positions; bars and
         // effects only redraw their children and retain their container pose.
         uiBaseRefreshed && SIZE_REFRESHED_UI_KEYS.has(key),
         // In v14 _refreshTooltip derives only levelIndicator.y from the
         // already-lifted tooltip. Other native UI positions are untouched.
-        uiRetainsOwnedOffset && (key === "levelIndicator")
+        uiRetainsOwnedOffset && (key === "levelIndicator"),
+        externalLayout?.bases?.[key] ?? null
       );
     }
   }
@@ -84,32 +94,42 @@ export class TokenLiftRenderer {
    * creates no per-target pose/options objects, and never rewrites scale or
    * alpha.
    */
-  applyAmbient(ambientOffsetY = 0) {
+  applyAmbient(ambientOffsetY = 0, externalLayout = null) {
     if (!this.#enabled) return;
     const ambientY = finiteOrZero(ambientOffsetY);
     this.#meshTarget.updateOwnedOffset(
       this.#token?.mesh,
       this.#offsetX,
-      this.#offsetY + ambientY
+      this.#offsetY + ambientY,
+      externalLayout?.bases?.mesh ?? null
     );
     for (const [key, target] of this.#uiTargets) {
       const isNativeElevationLabel = (key === "tooltip") || (key === "levelIndicator");
+      const ownsExternalOffset = externalLayout?.supported && (key === "levelIndicator");
       target.updateOwnedOffset(
         this.#token?.[key],
-        this.#offsetX + (isNativeElevationLabel ? this.#labelOffsetX : 0),
-        this.#offsetY + ambientY + (isNativeElevationLabel ? this.#labelOffsetY : 0)
+        this.#offsetX
+          + (isNativeElevationLabel ? this.#labelOffsetX : 0)
+          + (ownsExternalOffset ? externalLayout.offsetX : 0),
+        this.#offsetY
+          + ambientY
+          + (isNativeElevationLabel ? this.#labelOffsetY : 0)
+          + (ownsExternalOffset ? externalLayout.offsetY : 0),
+        externalLayout?.bases?.[key] ?? null
       );
     }
   }
 
   /** Rebase only the Primary mesh after Foundry moves it back to token.center. */
-  rebaseMeshPosition(ambientOffsetY = 0) {
+  rebaseMeshPosition(ambientOffsetY = 0, externalLayout = null) {
     if (!this.#enabled) return;
     this.#meshTarget.applyXY(
       this.#token?.mesh,
       this.#offsetX,
       this.#offsetY + finiteOrZero(ambientOffsetY),
-      true
+      true,
+      false,
+      externalLayout?.bases?.mesh ?? null
     );
   }
 
@@ -145,7 +165,14 @@ class ReversibleOffsetTarget {
     this.yieldedToLaterWriter = false;
   }
 
-  applyXY(target, ownedX, ownedY, baseRefreshed = false, retainsOwnedOffset = false) {
+  applyXY(
+    target,
+    ownedX,
+    ownedY,
+    baseRefreshed = false,
+    retainsOwnedOffset = false,
+    authoritativeBase = null
+  ) {
     if (!target || target.destroyed) {
       if (target !== this.target) this.restore();
       return;
@@ -179,12 +206,29 @@ class ReversibleOffsetTarget {
       this.lastWrittenX,
       this.lastWrittenY
     );
+    const externalBase = readPosition(authoritativeBase);
+    const matchesExternalBase = !!externalBase && positionsEqual(
+      currentX,
+      currentY,
+      externalBase.x,
+      externalBase.y
+    );
     const referenceChanged = hasLastWrite
       && this.referenceProvider
       && (this.lastReferenceX !== null)
       && !positionsEqual(referenceX, referenceY, this.lastReferenceX, this.lastReferenceY);
 
-    if (!hasLastWrite || baseRefreshed || referenceChanged) {
+    if (externalBase) {
+      if (!matchesLastWrite && !matchesExternalBase) {
+        // The adapter only reclaims a target when it still contains our exact
+        // write or Z Scatter's exact documented base. Any third value belongs
+        // to an unknown later writer and remains untouched.
+        this.yieldedToLaterWriter = true;
+        return;
+      }
+      this.#captureBase(externalBase.x, externalBase.y, referenceX, referenceY);
+      this.yieldedToLaterWriter = false;
+    } else if (!hasLastWrite || baseRefreshed || referenceChanged) {
       // An authoritative core refresh wins even when its new base happens to
       // equal our previous visual write; equality alone cannot disprove it.
       this.#captureBase(currentX, currentY, referenceX, referenceY);
@@ -221,21 +265,48 @@ class ReversibleOffsetTarget {
   }
 
   /** Update a proven owned position without recapturing any core base. */
-  updateOwnedOffset(target, ownedX, ownedY) {
+  updateOwnedOffset(target, ownedX, ownedY, authoritativeBase = null) {
     if (!target || target.destroyed || (target !== this.target) || (this.lastWrittenX === null)) return;
     const position = target.position ?? target;
     const currentX = Number(position?.x);
     const currentY = Number(position?.y);
     if (!Number.isFinite(currentX) || !Number.isFinite(currentY)) return;
-    if (!positionsEqual(currentX, currentY, this.lastWrittenX, this.lastWrittenY)) {
-      this.yieldedToLaterWriter = true;
-      return;
-    }
-
     const nextOwnedX = finiteOrZero(ownedX);
     const nextOwnedY = finiteOrZero(ownedY);
-    const x = currentX - this.ownedX + nextOwnedX;
-    const y = currentY - this.ownedY + nextOwnedY;
+    const matchesLastWrite = positionsEqual(currentX, currentY, this.lastWrittenX, this.lastWrittenY);
+    const externalBase = readPosition(authoritativeBase);
+    let x;
+    let y;
+    if (externalBase) {
+      const matchesExternalBase = positionsEqual(currentX, currentY, externalBase.x, externalBase.y);
+      if (!matchesLastWrite && !matchesExternalBase) {
+        this.yieldedToLaterWriter = true;
+        return;
+      }
+      let referenceX = externalBase.x;
+      let referenceY = externalBase.y;
+      if (this.referenceProvider) {
+        const reference = readPosition(this.referenceProvider());
+        if (reference) {
+          referenceX = reference.x;
+          referenceY = reference.y;
+        }
+      }
+      this.#captureBase(externalBase.x, externalBase.y, referenceX, referenceY);
+      const baseX = this.referenceProvider ? referenceX + this.baseX : this.baseX;
+      const baseY = this.referenceProvider ? referenceY + this.baseY : this.baseY;
+      x = baseX + nextOwnedX;
+      y = baseY + nextOwnedY;
+      this.lastReferenceX = this.referenceProvider ? referenceX : null;
+      this.lastReferenceY = this.referenceProvider ? referenceY : null;
+    } else {
+      if (!matchesLastWrite) {
+        this.yieldedToLaterWriter = true;
+        return;
+      }
+      x = currentX - this.ownedX + nextOwnedX;
+      y = currentY - this.ownedY + nextOwnedY;
+    }
     this.ownedX = nextOwnedX;
     this.ownedY = nextOwnedY;
     writePosition(target, x, y);

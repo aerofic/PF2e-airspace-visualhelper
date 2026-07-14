@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.1 — Adaptive HUD and Z Scatter Compatibility
+
+- Replaced absolute 5 ft pixel spacing with compact relative visual levels while preserving every Token's exact elevation and strict high-to-low ordering.
+- Removed expanded-HUD width and height caps so the ApplicationV2 window grows to contain every filtered Token without an internal axis viewport.
+- Shortened altitude Token cards from 225 px to 132 px and retained independent horizontal lanes for Tokens at the same elevation.
+- Added an optional, feature-detected Z Scatter 2.2.4 adapter which composes its visual offset into the acrylic base, lifted Mesh, and native Token UI without reading private module state.
+- Added a reversible union hit area so both the scattered ground footprint and visibly lifted airborne art can select and drag the same Token when air and ground artwork overlap.
+- Suspended compatibility ownership during Foundry movement animation, yielded to unknown third-party hit areas, and restored the latest Z Scatter layout on teardown.
+- Added focused regression coverage for relative layout growth, uncapped HUD dimensions, exact external-layout composition, dual-region selection, movement suspension, and late Z Scatter writes.
+
 ## 0.4.0 — Layered Acrylic Flight Presentation
 
 - Rebuilt the flight stand as layered acrylic with a restrained transparent body, refractive edges, and narrow specular highlights instead of a laser-like glow.

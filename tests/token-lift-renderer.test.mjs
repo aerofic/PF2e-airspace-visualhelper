@@ -78,6 +78,61 @@ test("yields to a later mesh writer without doubling or overwriting it", () => {
   assert.deepEqual([token.mesh.position.x, token.mesh.position.y], [35, -50]);
 });
 
+test("composes and reacquires exact Z Scatter bases without claiming its offset", () => {
+  const token = makeToken();
+  const renderer = new TokenLiftRenderer(token);
+  const layout = {
+    active: true,
+    supported: true,
+    offsetX: 10,
+    offsetY: 5,
+    bases: {
+      mesh: { x: 60, y: 55 },
+      tooltip: { x: 60, y: 3 },
+      nameplate: { x: 60, y: 111 },
+      bars: { x: 10, y: 5 },
+      effects: { x: 10, y: 5 }
+    }
+  };
+
+  // Simulate Z Scatter's exact visual write before this module composes lift.
+  token.mesh.position.set(60, 55);
+  token.tooltip.position.set(60, 3);
+  token.nameplate.position.set(60, 111);
+  token.bars.position.set(10, 5);
+  token.effects.position.set(10, 5);
+  renderer.apply({
+    offsetX: -20,
+    offsetY: -50,
+    labelOffsetX: -5,
+    labelOffsetY: -3
+  }, { externalLayout: layout });
+
+  assert.deepEqual([token.mesh.position.x, token.mesh.position.y], [40, 5]);
+  assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [35, -50]);
+  assert.deepEqual([token.nameplate.position.x, token.nameplate.position.y], [40, 61]);
+  assert.deepEqual([token.bars.position.x, token.bars.position.y], [-10, -45]);
+  assert.deepEqual([token.levelIndicator.position.x, token.levelIndicator.position.y], [35, -72]);
+
+  // Z Scatter may write outside refreshToken. The low-frequency compatibility
+  // pass recognizes only these exact bases and safely reapplies the lift.
+  token.mesh.position.set(60, 55);
+  token.tooltip.position.set(60, 3);
+  token.nameplate.position.set(60, 111);
+  token.bars.position.set(10, 5);
+  token.effects.position.set(10, 5);
+  renderer.applyAmbient(1, layout);
+  assert.deepEqual([token.mesh.position.x, token.mesh.position.y], [40, 6]);
+  assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [35, -49]);
+
+  renderer.restore();
+  assert.deepEqual([token.mesh.position.x, token.mesh.position.y], [60, 55]);
+  assert.deepEqual([token.tooltip.position.x, token.tooltip.position.y], [60, 3]);
+  assert.deepEqual([token.nameplate.position.x, token.nameplate.position.y], [60, 111]);
+  assert.deepEqual([token.bars.position.x, token.bars.position.y], [10, 5]);
+  assert.deepEqual([token.levelIndicator.position.x, token.levelIndicator.position.y], [50, -24]);
+});
+
 test("resumes ownership after a confirmed core position refresh", () => {
   const token = makeToken();
   const renderer = new TokenLiftRenderer(token);

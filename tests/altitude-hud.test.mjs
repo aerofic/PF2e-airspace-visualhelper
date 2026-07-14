@@ -8,6 +8,7 @@ class FakeApplicationV2 {
     this.renderCalls = [];
     this.positionCalls = [];
     this.closeCalls = [];
+    this.position = { width: 360, height: 32, left: 100, top: 52 };
   }
 
   render(options = {}) {
@@ -17,6 +18,7 @@ class FakeApplicationV2 {
 
   setPosition(position = {}) {
     this.positionCalls.push({ ...position });
+    this.position = { ...this.position, ...position };
     return position;
   }
 
@@ -60,13 +62,14 @@ const {
   ALTITUDE_HUD_EXPANDED_POSITION,
   AltitudeHud,
   buildAltitudeRelations,
+  calculateExpandedHudPosition,
   extractFlySpeed,
   isHudTokenVisible
 } = await import("../src/altitude-hud.js");
 
 test("defaults to an exact ultra-compact frameless top HUD", () => {
   assert.deepEqual(ALTITUDE_HUD_DEFAULT_POSITION, { width: 360, height: 32, top: 52 });
-  assert.deepEqual(ALTITUDE_HUD_EXPANDED_POSITION, { width: 520, height: 260, top: 52 });
+  assert.deepEqual(ALTITUDE_HUD_EXPANDED_POSITION, { width: 360, height: 73, top: 52 });
   assert.deepEqual(AltitudeHud.DEFAULT_OPTIONS.position, ALTITUDE_HUD_DEFAULT_POSITION);
   assert.equal("left" in ALTITUDE_HUD_DEFAULT_POSITION, false);
   assert.equal("left" in ALTITUDE_HUD_EXPANDED_POSITION, false);
@@ -91,13 +94,13 @@ test("toggles detail state with a main-part render and the matching dimensions",
   const compactContext = await hud._prepareContext({});
   assert.equal(compactContext.isExpanded, false);
   assert.equal(compactContext.showHeightAxis, false);
-  assert.equal(compactContext.axis, null, "compact HUD should not calculate the proportional axis");
+  assert.equal(compactContext.axis, null, "compact HUD should not calculate the relative axis");
   assert.deepEqual(compactContext.relations, [], "compact HUD should not build hidden relation rows");
   await toggle.call(hud, event, {});
   const expandedContext = await hud._prepareContext({});
   assert.equal(expandedContext.isExpanded, true);
   assert.equal(expandedContext.showHeightAxis, true);
-  assert.ok(expandedContext.axis, "expanded HUD should restore the proportional axis");
+  assert.ok(expandedContext.axis, "expanded HUD should restore the relative axis");
   assert.equal(event.prevented, 1);
   assertMainPartRender(hud.renderCalls.at(-1));
   assertPositionWasApplied(hud, ALTITUDE_HUD_EXPANDED_POSITION);
@@ -107,6 +110,15 @@ test("toggles detail state with a main-part render and the matching dimensions",
   assert.equal(event.prevented, 2);
   assertMainPartRender(hud.renderCalls.at(-1));
   assertPositionWasApplied(hud, ALTITUDE_HUD_DEFAULT_POSITION);
+});
+
+test("sizes the expanded HUD from all relative levels without a maximum cap", () => {
+  const axis = { width: 1_840, height: 25_600 };
+  const position = calculateExpandedHudPosition({ axis, entryCount: 800, hasSelected: true });
+  assert.deepEqual(position, { width: 1_840, height: 25_681, top: 52 });
+
+  const listPosition = calculateExpandedHudPosition({ entryCount: 9 });
+  assert.deepEqual(listPosition, { width: 360, height: 202, top: 52 });
 });
 
 test("keeps the selected filter while compact details are toggled", async () => {
@@ -159,6 +171,17 @@ test("template gates all details and exposes an accessible disclosure control", 
   const closeTag = findButtonTag(template, "closeHud");
   assert.match(closeTag, /\btype=["']button["']/);
   assert.match(closeTag, /\baria-label=["'][^"']+["']/);
+  assert.match(template, /class=["']airspace-axis["'][^>]*style=["'][^"']*width:\s*{{axis\.width}}px/);
+  assert.doesNotMatch(template, /min-width:\s*{{axis\.width}}px/);
+});
+
+test("CSS removes viewport caps and substantially shortens altitude Token cards", () => {
+  const css = readFileSync(new URL("../styles/module.css", import.meta.url), "utf8");
+  const rootRule = css.match(/\.pf2e-flying-visual-helper\.airspace-hud\s*{([^}]+)}/)?.[1] ?? "";
+  const nodeRule = css.match(/button\.airspace-token-node\s*{([^}]+)}/)?.[1] ?? "";
+  assert.doesNotMatch(rootRule, /max-(?:inline|block)-size/);
+  assert.match(nodeRule, /inline-size:\s*132px/);
+  assert.doesNotMatch(nodeRule, /inline-size:\s*225px/);
 });
 
 test("reads PF2e prepared Fly Speed only with observer permission", () => {

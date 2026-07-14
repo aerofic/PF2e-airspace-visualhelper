@@ -2,17 +2,13 @@ import { HUD_FILTERS, VISUAL_EPSILON } from "./constants.js";
 import { normalizeHudElevation } from "./visual-math.js";
 
 export const ALTITUDE_STEP_FEET = 5;
-const PIXELS_PER_STEP = 24;
-const AXIS_PADDING = 32;
-const MIN_AXIS_SPAN_FEET = 25;
-const CLOSE_NODE_PIXELS = 30;
-const MAX_AXIS_TICKS = 240;
-const MAX_AXIS_BODY_PIXELS = 24_000;
-const MIN_AXIS_WIDTH = 720;
-const AXIS_NODE_LEFT = 80;
-const AXIS_NODE_WIDTH = 245;
-const AXIS_LANE_OFFSET = 252;
-const AXIS_TRAILING_SPACE = 32;
+export const RELATIVE_LEVEL_GAP_PIXELS = 32;
+const AXIS_PADDING = 18;
+const MIN_AXIS_WIDTH = 192;
+const AXIS_NODE_LEFT = 46;
+const AXIS_NODE_WIDTH = 132;
+const AXIS_LANE_OFFSET = 138;
+const AXIS_TRAILING_SPACE = 12;
 
 /** Stable, non-mutating high-to-low sort. Every Token remains its own row. */
 export function sortAltitudeEntries(entries) {
@@ -36,70 +32,65 @@ export function filterAltitudeEntries(entries, filter = HUD_FILTERS.ALL) {
 }
 
 /**
- * Build a linear vertical axis. Token positions are never bucketed or merged;
- * a 5 ft difference always occupies the same pixel distance at every height.
+ * Build a compact relative-height axis.
+ *
+ * Exact elevations remain visible on every Token node, but vertical pixels no
+ * longer claim to be rules distance: each distinct elevation occupies one
+ * equally spaced visual level. Tokens at the same elevation share that level
+ * and receive independent horizontal lanes. Both dimensions grow with content
+ * and deliberately have no hard upper bound.
  */
 export function buildAltitudeAxis(entries, {
-  step = ALTITUDE_STEP_FEET,
-  pixelsPerStep = PIXELS_PER_STEP,
+  levelGap = RELATIVE_LEVEL_GAP_PIXELS,
   padding = AXIS_PADDING,
-  minimumSpan = MIN_AXIS_SPAN_FEET
+  nodeLeft = AXIS_NODE_LEFT,
+  nodeWidth = AXIS_NODE_WIDTH,
+  laneOffset = AXIS_LANE_OFFSET,
+  trailingSpace = AXIS_TRAILING_SPACE,
+  minimumWidth = MIN_AXIS_WIDTH
 } = {}) {
-  const safeStep = positiveOr(step, ALTITUDE_STEP_FEET);
-  const safePixels = positiveOr(pixelsPerStep, PIXELS_PER_STEP);
-  const safePadding = Math.max(0, Number(padding) || 0);
+  const safeGap = positiveOr(levelGap, RELATIVE_LEVEL_GAP_PIXELS);
+  const safePadding = Math.max(0, finiteOr(padding, AXIS_PADDING));
+  const safeNodeLeft = Math.max(0, finiteOr(nodeLeft, AXIS_NODE_LEFT));
+  const safeNodeWidth = positiveOr(nodeWidth, AXIS_NODE_WIDTH);
+  const safeLaneOffset = positiveOr(laneOffset, AXIS_LANE_OFFSET);
+  const safeTrailing = Math.max(0, finiteOr(trailingSpace, AXIS_TRAILING_SPACE));
+  const safeMinimumWidth = Math.max(0, finiteOr(minimumWidth, MIN_AXIS_WIDTH));
   const sorted = sortAltitudeEntries(entries);
-  const elevations = sorted.map(entry => normalizeHudElevation(entry.elevation));
-  const actualMinimum = Math.min(0, ...elevations);
-  const actualMaximum = Math.max(0, ...elevations);
-  const snappedMinimum = Math.floor(actualMinimum / safeStep) * safeStep;
-  const minimum = Number.isFinite(snappedMinimum) ? snappedMinimum : actualMinimum;
-  const snappedMaximum = Math.ceil(actualMaximum / safeStep) * safeStep;
-  const maximum = Math.max(
-    minimum + positiveOr(minimumSpan, MIN_AXIS_SPAN_FEET),
-    Number.isFinite(snappedMaximum) ? snappedMaximum : actualMaximum
-  );
-  const rawSteps = (maximum / safeStep) - (minimum / safeStep);
-  const steps = Number.isFinite(rawSteps)
-    ? Math.max(1, Math.ceil(rawSteps))
-    : Number.MAX_SAFE_INTEGER;
-  // Preserve a linear scale while bounding pathological Scene elevations to a
-  // browser-safe scroll height. Normal PF2e encounters retain 24 px per 5 ft.
-  const bodyHeight = Math.min(steps * safePixels, MAX_AXIS_BODY_PIXELS);
-  const height = (safePadding * 2) + bodyHeight;
-  const yForElevation = elevation => safePadding
-    + (stableAxisRatio(normalizeHudElevation(elevation), minimum, maximum) * bodyHeight);
+  const levels = [];
 
-  // Tick density is presentational only. Token nodes always retain their exact
-  // linearly-proportional position, but huge spans cannot create unbounded DOM.
-  const tickSegments = Math.min(steps, MAX_AXIS_TICKS);
-  const ticks = Array.from({ length: tickSegments + 1 }, (_, index) => {
-    const ratio = index / tickSegments;
-    const elevation = stableInterpolate(maximum, minimum, ratio);
-    return {
-      elevation,
-      y: safePadding + (ratio * bodyHeight),
-      major: (index === 0) || (index === tickSegments) || isMajorTick(elevation, safeStep)
-    };
-  });
+  for (const entry of sorted) {
+    const elevation = normalizeHudElevation(entry.elevation);
+    const current = levels.at(-1);
+    if (!current || (Math.abs(current.elevation - elevation) > VISUAL_EPSILON)) {
+      levels.push({ elevation, entries: [entry] });
+    } else {
+      current.entries.push(entry);
+    }
+  }
 
-  const laneLastY = [];
-  const nodes = sorted.map(entry => {
-    const y = yForElevation(entry.elevation);
-    let lane = laneLastY.findIndex(lastY => Math.abs(lastY - y) >= CLOSE_NODE_PIXELS);
-    // Lanes are intentionally unbounded: every Token remains independently
-    // reachable even when twenty creatures share elevation 0 in a normal fight.
-    if (lane < 0) lane = laneLastY.length;
-    laneLastY[lane] = y;
-    return { ...entry, axisY: y, lane };
-  });
-  const maximumLane = nodes.reduce((highest, node) => Math.max(highest, node.lane), 0);
+  const nodes = [];
+  const ticks = [];
+  let maximumLane = 0;
+  for (let levelIndex = 0; levelIndex < levels.length; levelIndex += 1) {
+    const level = levels[levelIndex];
+    const y = safePadding + (levelIndex * safeGap);
+    ticks.push({ elevation: level.elevation, y, major: true });
+    level.entries.forEach((entry, lane) => {
+      maximumLane = Math.max(maximumLane, lane);
+      nodes.push({ ...entry, axisY: y, lane, relativeLevel: levelIndex });
+    });
+  }
+
+  const minimum = levels.at(-1)?.elevation ?? 0;
+  const maximum = levels[0]?.elevation ?? 0;
+  const height = (safePadding * 2) + (Math.max(0, levels.length - 1) * safeGap);
   const width = Math.max(
-    MIN_AXIS_WIDTH,
-    AXIS_NODE_LEFT + (maximumLane * AXIS_LANE_OFFSET) + AXIS_NODE_WIDTH + AXIS_TRAILING_SPACE
+    safeMinimumWidth,
+    safeNodeLeft + (maximumLane * safeLaneOffset) + safeNodeWidth + safeTrailing
   );
 
-  return { minimum, maximum, height, width, ticks, nodes };
+  return { minimum, maximum, height, width, ticks, nodes, levelCount: levels.length };
 }
 
 /** Format exact finite heights without forcing them into 5 ft buckets. */
@@ -111,30 +102,14 @@ export function formatFeet(value) {
   return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
 }
 
-function isMajorTick(value, step) {
-  const majorStep = step * 5;
-  return Math.abs(value % majorStep) <= VISUAL_EPSILON;
-}
-
 function positiveOr(value, fallback) {
   const number = Number(value);
   return Number.isFinite(number) && (number > 0) ? number : fallback;
 }
 
-/** Calculate an overflow-safe ratio where maximum maps to 0 and minimum to 1. */
-function stableAxisRatio(value, minimum, maximum) {
-  if (maximum === minimum) return 0;
-  const scale = Math.max(Math.abs(minimum), Math.abs(maximum), Math.abs(value), 1);
-  const denominator = (maximum / scale) - (minimum / scale);
-  if (!Number.isFinite(denominator) || (Math.abs(denominator) <= Number.EPSILON)) return 0;
-  return Math.min(Math.max(((maximum / scale) - (value / scale)) / denominator, 0), 1);
-}
-
-/** Convex interpolation avoids overflowing maximum - minimum. */
-function stableInterpolate(maximum, minimum, ratio) {
-  if (ratio <= 0) return maximum;
-  if (ratio >= 1) return minimum;
-  return (maximum * (1 - ratio)) + (minimum * ratio);
+function finiteOr(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
 }
 
 function gameLocale() {

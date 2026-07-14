@@ -78,9 +78,24 @@ class FakeGraphics extends FakeContainer {
   endFill() { this.commands.push(["endFill"]); return this; }
 }
 
+class FakeRectangle {
+  constructor(x, y, width, height) {
+    this.x = x;
+    this.y = y;
+    this.width = width;
+    this.height = height;
+  }
+
+  contains(x, y) {
+    return x >= this.x && x <= this.x + this.width
+      && y >= this.y && y <= this.y + this.height;
+  }
+}
+
 globalThis.PIXI = {
   Container: FakeContainer,
   Graphics: FakeGraphics,
+  Rectangle: FakeRectangle,
   BLEND_MODES: { NORMAL: "normal", SCREEN: "screen", MULTIPLY: "multiply" },
   UPDATE_PRIORITY: { NORMAL: 0, PRIMARY: 3 }
 };
@@ -131,6 +146,8 @@ function makeToken(elevation) {
   token.bars = new FakeContainer();
   token.effects = new FakeContainer();
   token.animationContexts = new Map();
+  token.w = 100;
+  token.h = 100;
   return token;
 }
 
@@ -223,6 +240,46 @@ test("keeps the ground base snapped while only the rendered mesh moves", () => {
   visual.destroy();
   assert.deepEqual([token.mesh.x, token.mesh.y], [token.center.x, token.center.y]);
   assert.deepEqual([token.tooltip.x, token.tooltip.y], [50, -4]);
+});
+
+test("composes Z Scatter offsets into the base, lifted art, native UI, and hit area", () => {
+  const previousGame = globalThis.game;
+  globalThis.game = {
+    modules: new Map([["z-scatter", { active: true }]])
+  };
+  try {
+    const token = makeToken(60);
+    const sourceShape = new FakeRectangle(0, 0, 100, 100);
+    token.shape = sourceShape;
+    applyFakeZScatter(token, 18, -10);
+    const visual = new FlyingTokenVisual(token, settings);
+    visual.setReducedMotion(true);
+
+    assert.equal(visual.requiresTicker, true, "Z Scatter monitoring must survive reduced motion");
+    assert.deepEqual([visual.container.x, visual.container.y], [18, -10]);
+    assertClose(token.mesh.x, 68 + visual.metrics.token.offsetX);
+    assertClose(token.mesh.y, 40 + visual.metrics.token.offsetY);
+    assert.equal(token.hitArea.contains(20, 0), true, "scattered base should remain clickable");
+    assert.equal(
+      token.hitArea.contains(50 + 18 + visual.metrics.token.offsetX, 50 - 10 + visual.metrics.token.offsetY),
+      true,
+      "lifted art should gain a second selectable region"
+    );
+
+    // Z Scatter writes directly outside refreshToken during its queued layout.
+    const latestScatterHitArea = applyFakeZScatter(token, -14, 12);
+    visual.tick(performance.now() + 200);
+    assert.deepEqual([visual.container.x, visual.container.y], [-14, 12]);
+    assertClose(token.mesh.x, 36 + visual.metrics.token.offsetX);
+    assertClose(token.mesh.y, 62 + visual.metrics.token.offsetY);
+
+    visual.destroy();
+    assert.strictEqual(token.hitArea, latestScatterHitArea);
+    assert.deepEqual([token.mesh.x, token.mesh.y], [36, 62]);
+    assert.deepEqual([token.tooltip.x, token.tooltip.y], [36, 10]);
+  } finally {
+    globalThis.game = previousGame;
+  }
 });
 
 test("anchors non-rectangular Token shapes to Foundry's actual local center", () => {
@@ -811,6 +868,26 @@ function setTokenPosition(token, x, y) {
   token.document.y = y;
   token.position.set(x, y);
   token.mesh.position.set(token.center.x, token.center.y);
+}
+
+function applyFakeZScatter(token, offsetX, offsetY) {
+  const hitArea = new FakeRectangle(
+    token.shape.x + offsetX,
+    token.shape.y + offsetY,
+    token.shape.width,
+    token.shape.height
+  );
+  token.hitArea = hitArea;
+  token.mesh.position.set(token.center.x + offsetX, token.center.y + offsetY);
+  token.tooltip.position.set((token.w / 2) + offsetX, offsetY - 2);
+  token.nameplate.position.set((token.w / 2) + offsetX, token.h + 2 + offsetY);
+  token.bars.position.set(offsetX, offsetY);
+  token.effects.position.set(offsetX, offsetY);
+  return hitArea;
+}
+
+function assertClose(actual, expected, message) {
+  assert.ok(Math.abs(actual - expected) <= 0.000001, message ?? `${actual} != ${expected}`);
 }
 
 function minimumLineY(graphics) {
