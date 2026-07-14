@@ -1,7 +1,9 @@
 import { VISUAL_EPSILON } from "./constants.js";
 
-const ART_UI_KEYS = ["tooltip", "levelIndicator", "nameplate", "bars", "effects"];
-const SIZE_REFRESHED_UI_KEYS = new Set(["tooltip", "levelIndicator", "nameplate"]);
+// Native elevation labels are intentionally absent. Foundry/PF2e owns their
+// position, content, visibility, and alpha without any module intervention.
+const ART_UI_KEYS = ["nameplate", "bars", "effects"];
+const SIZE_REFRESHED_UI_KEYS = new Set(["nameplate"]);
 
 /**
  * Applies a reversible visual offset to Foundry's Primary Token mesh and the
@@ -19,8 +21,6 @@ export class TokenLiftRenderer {
   #enabled = false;
   #offsetX = 0;
   #offsetY = 0;
-  #labelOffsetX = 0;
-  #labelOffsetY = 0;
 
   constructor(token) {
     this.#token = token;
@@ -36,8 +36,6 @@ export class TokenLiftRenderer {
     offsetY = 0,
     scale = 1,
     alpha = 1,
-    labelOffsetX = 0,
-    labelOffsetY = 0,
     ambientOffsetY = 0
   } = {}, {
     enabled = true,
@@ -45,14 +43,11 @@ export class TokenLiftRenderer {
     meshScaleBaseRefreshed = false,
     meshAlphaBaseRefreshed = false,
     uiBaseRefreshed = false,
-    uiRetainsOwnedOffset = false,
     externalLayout = null
   } = {}) {
     this.#enabled = !!enabled;
     this.#offsetX = enabled ? finiteOrZero(offsetX) : 0;
     this.#offsetY = enabled ? finiteOrZero(offsetY) : 0;
-    this.#labelOffsetX = enabled ? finiteOrZero(labelOffsetX) : 0;
-    this.#labelOffsetY = enabled ? finiteOrZero(labelOffsetY) : 0;
     const ambientY = enabled ? finiteOrZero(ambientOffsetY) : 0;
     const mesh = this.#token?.mesh;
 
@@ -61,29 +56,18 @@ export class TokenLiftRenderer {
       this.#offsetX,
       this.#offsetY + ambientY,
       meshBaseRefreshed,
-      false,
       externalLayout?.bases?.mesh ?? null
     );
     this.#meshScaleTarget.apply(mesh, enabled ? scale : 1, meshScaleBaseRefreshed);
     this.#meshAlphaTarget.apply(mesh, enabled ? alpha : 1, meshAlphaBaseRefreshed);
     for (const [key, target] of this.#uiTargets) {
-      const isNativeElevationLabel = (key === "tooltip") || (key === "levelIndicator");
-      const ownsExternalOffset = externalLayout?.supported && (key === "levelIndicator");
       target.applyXY(
         this.#token?.[key],
-        this.#offsetX
-          + (isNativeElevationLabel ? this.#labelOffsetX : 0)
-          + (ownsExternalOffset ? externalLayout.offsetX : 0),
-        this.#offsetY
-          + ambientY
-          + (isNativeElevationLabel ? this.#labelOffsetY : 0)
-          + (ownsExternalOffset ? externalLayout.offsetY : 0),
-        // v14 _refreshSize resets these three container positions; bars and
-        // effects only redraw their children and retain their container pose.
+        this.#offsetX,
+        this.#offsetY + ambientY,
+        // v14 _refreshSize resets the nameplate position; bars and effects
+        // only redraw their children and retain their container pose.
         uiBaseRefreshed && SIZE_REFRESHED_UI_KEYS.has(key),
-        // In v14 _refreshTooltip derives only levelIndicator.y from the
-        // already-lifted tooltip. Other native UI positions are untouched.
-        uiRetainsOwnedOffset && (key === "levelIndicator"),
         externalLayout?.bases?.[key] ?? null
       );
     }
@@ -104,17 +88,10 @@ export class TokenLiftRenderer {
       externalLayout?.bases?.mesh ?? null
     );
     for (const [key, target] of this.#uiTargets) {
-      const isNativeElevationLabel = (key === "tooltip") || (key === "levelIndicator");
-      const ownsExternalOffset = externalLayout?.supported && (key === "levelIndicator");
       target.updateOwnedOffset(
         this.#token?.[key],
-        this.#offsetX
-          + (isNativeElevationLabel ? this.#labelOffsetX : 0)
-          + (ownsExternalOffset ? externalLayout.offsetX : 0),
-        this.#offsetY
-          + ambientY
-          + (isNativeElevationLabel ? this.#labelOffsetY : 0)
-          + (ownsExternalOffset ? externalLayout.offsetY : 0),
+        this.#offsetX,
+        this.#offsetY + ambientY,
         externalLayout?.bases?.[key] ?? null
       );
     }
@@ -128,7 +105,6 @@ export class TokenLiftRenderer {
       this.#offsetX,
       this.#offsetY + finiteOrZero(ambientOffsetY),
       true,
-      false,
       externalLayout?.bases?.mesh ?? null
     );
   }
@@ -141,7 +117,6 @@ export class TokenLiftRenderer {
     for (const target of this.#uiTargets.values()) target.restore();
     this.#enabled = false;
     this.#offsetX = this.#offsetY = 0;
-    this.#labelOffsetX = this.#labelOffsetY = 0;
   }
 }
 
@@ -170,7 +145,6 @@ class ReversibleOffsetTarget {
     ownedX,
     ownedY,
     baseRefreshed = false,
-    retainsOwnedOffset = false,
     authoritativeBase = null
   ) {
     if (!target || target.destroyed) {
@@ -234,19 +208,11 @@ class ReversibleOffsetTarget {
       this.#captureBase(currentX, currentY, referenceX, referenceY);
       this.yieldedToLaterWriter = false;
     } else if (!matchesLastWrite) {
-      if (retainsOwnedOffset) {
-        // Core refreshed local UI content using an already-lifted tooltip.
-        // Fold only its known local delta into the unlifted base.
-        this.baseX += currentX - this.lastWrittenX;
-        this.baseY += currentY - this.lastWrittenY;
-        this.yieldedToLaterWriter = false;
-      } else {
-        // A later module owns this position now. Arbitrary absolute and
-        // additive writes cannot be distinguished safely, so yield until a
-        // confirmed core base refresh instead of doubling or clobbering it.
-        this.yieldedToLaterWriter = true;
-        return;
-      }
+      // A later module owns this position now. Arbitrary absolute and
+      // additive writes cannot be distinguished safely, so yield until a
+      // confirmed core base refresh instead of doubling or clobbering it.
+      this.yieldedToLaterWriter = true;
+      return;
     } else {
       this.yieldedToLaterWriter = false;
     }

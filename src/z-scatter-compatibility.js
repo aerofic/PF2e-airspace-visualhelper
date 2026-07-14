@@ -199,7 +199,6 @@ function createSupportedState(token, offsetX, offsetY) {
     offsetY,
     bases: {
       mesh: { x: centerX + offsetX, y: centerY + offsetY },
-      tooltip: { x: (width / 2) + offsetX, y: offsetY - 2 },
       nameplate: { x: (width / 2) + offsetX, y: height + 2 + offsetY },
       bars: { x: offsetX, y: offsetY },
       effects: { x: offsetX, y: offsetY }

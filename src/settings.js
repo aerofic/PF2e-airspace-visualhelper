@@ -8,7 +8,6 @@ export function registerSettings(onChange) {
   registerBoolean(SETTINGS.ENABLE_ALTITUDE_HUD, onChange);
   registerBoolean(SETTINGS.ENABLE_GROUND_PROJECTION, onChange);
   registerBoolean(SETTINGS.ENABLE_HEIGHT_AXIS, onChange);
-  registerBoolean(SETTINGS.ENABLE_HEIGHT_LABEL, onChange);
 
   // Preserve the V1 stand/shadow controls while adding V2 features.
   registerBoolean(SETTINGS.ENABLE_STAND, onChange);
@@ -26,7 +25,6 @@ export function readSettings() {
     enableAltitudeHud: game.settings.get(MODULE_ID, SETTINGS.ENABLE_ALTITUDE_HUD),
     enableGroundProjection: game.settings.get(MODULE_ID, SETTINGS.ENABLE_GROUND_PROJECTION),
     enableHeightAxis: game.settings.get(MODULE_ID, SETTINGS.ENABLE_HEIGHT_AXIS),
-    enableHeightLabel: game.settings.get(MODULE_ID, SETTINGS.ENABLE_HEIGHT_LABEL),
     enableStand: game.settings.get(MODULE_ID, SETTINGS.ENABLE_STAND),
     enableShadow: game.settings.get(MODULE_ID, SETTINGS.ENABLE_SHADOW),
     standOpacity: game.settings.get(MODULE_ID, SETTINGS.STAND_OPACITY),

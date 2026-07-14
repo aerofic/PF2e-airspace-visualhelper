@@ -7,8 +7,6 @@
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableGroundProjection.hint": "Mark Foundry's actual Token footprint with a non-interactive ground cue and a restrained projection guide.",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableHeightAxis.name": "Enable Height Axis",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableHeightAxis.hint": "Use a compact relative-height axis when the HUD details are expanded; exact elevation remains visible on every Token. Disable for a compact Token list.",
-  "PF2E_FLYING_VISUAL_HELPER.Settings.enableHeightLabel.name": "Enable Height Label",
-  "PF2E_FLYING_VISUAL_HELPER.Settings.enableHeightLabel.hint": "Keep Foundry VTT's native elevation tooltip and Level indicator, repositioned with the lifted art without replacing their text or units.",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableStand.name": "Enable Transparent Stand",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableStand.hint": "Render a layered acrylic shaft, fixed ground plate, and connectors between Foundry's Token-footprint center and the lifted art.",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableShadow.name": "Enable Height Shadow",

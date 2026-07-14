@@ -109,7 +109,6 @@ const settings = {
   enableStand: true,
   enableShadow: true,
   enableGroundProjection: true,
-  enableHeightLabel: true,
   standOpacity: 0.4,
   shadowOpacity: 0.35,
   projectionOpacity: 0.42,
@@ -151,25 +150,35 @@ function makeToken(elevation) {
   return token;
 }
 
-test("uses the native tooltip and restores it after disabling or teardown", () => {
+test("never changes native elevation UI position, visibility, or alpha", () => {
   const token = makeToken(60);
+  token.tooltip.position.set(63, -7);
+  token.tooltip.alpha = 0.43;
+  token.tooltip.renderable = false;
+  token.levelIndicator.position.set(61, -29);
   const visual = new FlyingTokenVisual(token, settings);
 
-  assert.equal(token.tooltip.renderable, true);
+  assert.equal(token.tooltip.renderable, false);
+  assert.equal(token.tooltip.alpha, 0.43);
+  assert.deepEqual([token.tooltip.x, token.tooltip.y], [63, -7]);
+  assert.deepEqual([token.levelIndicator.x, token.levelIndicator.y], [61, -29]);
   assert.equal(visual.container.children.length, 4);
   assert.ok(visual.container.children.every(child => child instanceof FakeGraphics));
 
-  visual.updateSettings({ ...settings, enableHeightLabel: false });
+  visual.updateSettings({ ...settings });
   assert.equal(token.tooltip.renderable, false);
+  assert.equal(token.tooltip.alpha, 0.43);
+  assert.deepEqual([token.tooltip.x, token.tooltip.y], [63, -7]);
+  assert.deepEqual([token.levelIndicator.x, token.levelIndicator.y], [61, -29]);
 
   visual.destroy();
-  assert.equal(token.tooltip.renderable, true);
-  assert.equal(token.tooltip.alpha, 1);
+  assert.equal(token.tooltip.renderable, false);
+  assert.equal(token.tooltip.alpha, 0.43);
   assert.deepEqual([token.mesh.x, token.mesh.y], [token.center.x, token.center.y]);
   assert.deepEqual([token.mesh.scale.x, token.mesh.scale.y], [1, 1]);
   assert.equal(token.mesh.alpha, 1);
-  assert.deepEqual([token.tooltip.x, token.tooltip.y], [50, -4]);
-  assert.deepEqual([token.levelIndicator.x, token.levelIndicator.y], [50, -24]);
+  assert.deepEqual([token.tooltip.x, token.tooltip.y], [63, -7]);
+  assert.deepEqual([token.levelIndicator.x, token.levelIndicator.y], [61, -29]);
   assert.equal(visual.container.destroyed, true);
 });
 
@@ -212,12 +221,8 @@ test("keeps the ground base snapped while only the rendered mesh moves", () => {
     [token.center.x, token.center.y]
   );
   assert.ok(offset.x < 0 && offset.y < 0);
-  assert.ok(Math.abs(
-    token.tooltip.x - (50 + offset.x + visual.metrics.token.labelOffsetX)
-  ) < 1e-9);
-  assert.ok(Math.abs(
-    token.tooltip.y - (-4 + offset.y + visual.metrics.token.labelOffsetY)
-  ) < 1e-9);
+  assert.deepEqual([token.tooltip.x, token.tooltip.y], [50, -4]);
+  assert.deepEqual([token.levelIndicator.x, token.levelIndicator.y], [50, -24]);
 
   // Simulate Foundry's refreshPosition at a snapped drag destination. Core
   // resets the mesh to center before the module's refreshToken hook runs.
@@ -757,32 +762,39 @@ test("samples core elevation frames and hides geometry for secret Tokens", () =>
   layer.deactivate(readyCanvas);
 });
 
-test("fades the native height tooltip during a core elevation animation", () => {
+test("does not fade or reposition native height UI during core elevation animation", () => {
   const token = makeToken(10);
+  token.tooltip.alpha = 0.74;
   const visual = new FlyingTokenVisual(token, settings);
   visual.beginCoreAnimation(60);
   visual.syncCoreElevation(30, { active: true });
-  assert.ok(token.tooltip.alpha < 1);
-  assert.ok(token.tooltip.alpha >= 0);
+  assert.equal(token.tooltip.alpha, 0.74);
+  assert.deepEqual([token.tooltip.x, token.tooltip.y], [50, -4]);
+  assert.deepEqual([token.levelIndicator.x, token.levelIndicator.y], [50, -24]);
   visual.syncCoreElevation(60, { active: false });
-  assert.equal(token.tooltip.alpha, 1);
+  assert.equal(token.tooltip.alpha, 0.74);
   visual.destroy();
 });
 
-test("yields native tooltip alpha to a module which writes later during the fade", () => {
+test("preserves later native elevation UI writes through animation and teardown", () => {
   const token = makeToken(10);
   const visual = new FlyingTokenVisual(token, settings);
   visual.beginCoreAnimation(60);
   visual.syncCoreElevation(30, { active: true });
-  assert.ok(token.tooltip.alpha < 1);
 
   token.tooltip.alpha = 0.37;
+  token.tooltip.position.set(72, -11);
+  token.levelIndicator.position.set(70, -31);
   visual.syncCoreElevation(40, { active: true });
   assert.equal(token.tooltip.alpha, 0.37);
+  assert.deepEqual([token.tooltip.x, token.tooltip.y], [72, -11]);
+  assert.deepEqual([token.levelIndicator.x, token.levelIndicator.y], [70, -31]);
   visual.syncCoreElevation(60, { active: false });
   assert.equal(token.tooltip.alpha, 0.37);
   visual.destroy();
   assert.equal(token.tooltip.alpha, 0.37);
+  assert.deepEqual([token.tooltip.x, token.tooltip.y], [72, -11]);
+  assert.deepEqual([token.levelIndicator.x, token.levelIndicator.y], [70, -31]);
 });
 
 test("does not treat a horizontal core movement segment as elevation animation", () => {
@@ -852,7 +864,6 @@ function installGameSettings(overrides = {}) {
     enableHeightAxis: true,
     enableStand: true,
     enableShadow: true,
-    enableHeightLabel: true,
     standOpacity: 0.4,
     shadowOpacity: 0.35,
     projectionOpacity: 0.42,

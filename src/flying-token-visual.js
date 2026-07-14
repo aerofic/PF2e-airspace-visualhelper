@@ -31,9 +31,7 @@ export class FlyingTokenVisual {
     this.displayElevation = normalizeFlyingElevation(initialElevation);
     this.targetElevation = this.displayElevation;
     this.animation = null;
-    this.coreAnimation = null;
     this.followingCoreAnimation = false;
-    this.labelAlpha = 1;
     this.lastAnimatedRenderAt = 0;
     this.lastAmbientApplyAt = Number.NEGATIVE_INFINITY;
     this.lastCompatibilityApplyAt = Number.NEGATIVE_INFINITY;
@@ -74,7 +72,6 @@ export class FlyingTokenVisual {
     parent.addChild(this.container);
     this.#syncCompatibility({ enabled: this.displayElevation > 0 });
     this.#syncPosition();
-    this.#captureNativeTooltip();
     this.render();
   }
 
@@ -120,7 +117,6 @@ export class FlyingTokenVisual {
     }
     this.#syncCompatibility({ enabled: this.liftEnabled || (this.displayElevation > 0) });
     this.#syncPosition();
-    this.#captureNativeTooltip();
     this.render();
   }
 
@@ -139,7 +135,6 @@ export class FlyingTokenVisual {
     if (reduced && this.animation) {
       this.displayElevation = this.targetElevation;
       this.animation = null;
-      this.labelAlpha = 1;
       this.render();
     }
   }
@@ -156,12 +151,10 @@ export class FlyingTokenVisual {
 
     this.targetElevation = target;
     this.followingCoreAnimation = false;
-    this.coreAnimation = null;
     this.#resetAmbientMotion();
     if (!animate || this.reducedMotion) {
       this.animation = null;
       this.displayElevation = target;
-      this.labelAlpha = 1;
       this.render();
       this.ambientStartedAt = performance.now();
       return false;
@@ -171,7 +164,6 @@ export class FlyingTokenVisual {
     this.animation = {
       from: this.displayElevation,
       to: target,
-      labelAlphaFrom: this.labelAlpha,
       startedAt: performance.now(),
       duration: calculateAnimationDuration(this.displayElevation, target, gridDistance)
     };
@@ -184,14 +176,7 @@ export class FlyingTokenVisual {
     this.animation = null;
     this.followingCoreAnimation = true;
     this.targetElevation = normalizeFlyingElevation(target);
-    this.coreAnimation = {
-      from: this.displayElevation,
-      to: this.targetElevation,
-      labelAlphaFrom: this.labelAlpha
-    };
     this.#resetAmbientMotion();
-    this.labelAlpha = 1;
-    this.#applyNativeTooltipState();
   }
 
   /** Apply one interpolated elevation frame supplied by Foundry. */
@@ -199,46 +184,27 @@ export class FlyingTokenVisual {
     this.animation = null;
     this.followingCoreAnimation = active;
     this.displayElevation = normalizeFlyingElevation(value);
-    const coreAnimation = this.coreAnimation;
-    if (coreAnimation && (Math.abs(coreAnimation.to - coreAnimation.from) > VISUAL_EPSILON)) {
-      const progress = Math.min(Math.max(
-        Math.abs(this.displayElevation - coreAnimation.from) / Math.abs(coreAnimation.to - coreAnimation.from),
-        0
-      ), 1);
-      this.labelAlpha = labelTransitionAlpha(progress, coreAnimation.to, coreAnimation.labelAlphaFrom);
-    } else {
-      this.labelAlpha = 1;
-    }
     if (!active) {
       this.targetElevation = this.displayElevation;
-      this.coreAnimation = null;
       this.ambientStartedAt = performance.now();
     }
-    // Tooltip alpha is cheap and should track every core frame even when PIXI
-    // geometry redraws are throttled to roughly 30 fps.
-    this.#applyNativeTooltipState();
     this.#renderAnimationFrame(performance.now(), { force: !active });
   }
 
   /** @returns {boolean} Whether this visual still needs shared ticker frames. */
   tick(now) {
     if (this.animation) {
-      const { from, to, labelAlphaFrom, startedAt, duration } = this.animation;
+      const { from, to, startedAt, duration } = this.animation;
       const progress = Math.min(Math.max((now - startedAt) / duration, 0), 1);
       const eased = easeInOutCosine(progress);
       this.displayElevation = from + ((to - from) * eased);
 
-      // Foundry owns the text and units. V2 only fades its public tooltip alpha.
-      this.labelAlpha = labelTransitionAlpha(progress, to, labelAlphaFrom);
-
       if (progress >= 1) {
         this.displayElevation = to;
         this.animation = null;
-        this.labelAlpha = 1;
         this.ambientStartedAt = now;
       }
 
-      this.#applyNativeTooltipState();
       this.#renderAnimationFrame(now, { force: progress >= 1 });
     }
 
@@ -268,12 +234,11 @@ export class FlyingTokenVisual {
     return this.requiresTicker;
   }
 
-  /** Handle only render flags which affect geometry or the native tooltip. */
+  /** Handle only render flags which affect flight geometry or lifted artwork. */
   onRefresh(flags = {}) {
     this.#syncCompatibility({ enabled: this.liftEnabled || (this.displayElevation > 0) });
     const positionRefreshed = flags.refreshPosition || flags.refreshTransform || flags.redraw;
     const uiBaseRefreshed = flags.refreshSize || flags.refreshTransform || flags.redraw;
-    const uiRetainsOwnedOffset = flags.refreshTooltip && !uiBaseRefreshed;
     const meshScaleBaseRefreshed = flags.refreshSize
       || flags.refreshTransform
       || flags.refreshMesh
@@ -285,8 +250,7 @@ export class FlyingTokenVisual {
         meshBaseRefreshed: positionRefreshed,
         meshScaleBaseRefreshed,
         meshAlphaBaseRefreshed,
-        uiBaseRefreshed,
-        uiRetainsOwnedOffset
+        uiBaseRefreshed
       });
       return;
     }
@@ -300,7 +264,6 @@ export class FlyingTokenVisual {
       && !meshScaleBaseRefreshed
       && !meshAlphaBaseRefreshed
       && !uiBaseRefreshed
-      && !uiRetainsOwnedOffset
       && !this.zScatterCompatibility.state.supported
       && this.liftEnabled
       && this.#shouldEnableTokenLift();
@@ -311,19 +274,16 @@ export class FlyingTokenVisual {
         meshBaseRefreshed: positionRefreshed,
         meshScaleBaseRefreshed,
         meshAlphaBaseRefreshed,
-        uiBaseRefreshed,
-        uiRetainsOwnedOffset
+        uiBaseRefreshed
       });
     }
-    if (flags.refreshTooltip || flags.refreshElevation) this.#applyNativeTooltipState();
   }
 
   render({
     meshBaseRefreshed = false,
     meshScaleBaseRefreshed = false,
     meshAlphaBaseRefreshed = false,
-    uiBaseRefreshed = false,
-    uiRetainsOwnedOffset = false
+    uiBaseRefreshed = false
   } = {}) {
     if (this.container.destroyed || this.token.destroyed) return;
     this.#syncCompatibility({ enabled: (this.displayElevation > 0) || (this.targetElevation > 0) });
@@ -353,95 +313,21 @@ export class FlyingTokenVisual {
       meshBaseRefreshed,
       meshScaleBaseRefreshed,
       meshAlphaBaseRefreshed,
-      uiBaseRefreshed,
-      uiRetainsOwnedOffset
+      uiBaseRefreshed
     });
-    this.#applyNativeTooltipState();
     this.lastAnimatedRenderAt = performance.now();
   }
 
   destroy() {
     this.animation = null;
-    this.coreAnimation = null;
     this.ambientOffsetY = 0;
     this.liftEnabled = false;
     this.tokenLift.restore();
     this.zScatterCompatibility.destroy();
-    this.#restoreNativeTooltip();
     if (!this.container.destroyed) {
       this.container.removeFromParent();
       this.container.destroy({ children: true });
     }
-  }
-
-  #captureNativeTooltip() {
-    const tooltip = this.token.tooltip;
-    if (!tooltip || tooltip.destroyed || (tooltip === this.nativeTooltip)) return;
-    this.#restoreNativeTooltip();
-    this.nativeTooltip = tooltip;
-    this.tooltipHiddenByModule = false;
-    this.tooltipAlphaAnimatedByModule = false;
-    this.tooltipAlphaYielded = false;
-  }
-
-  #applyNativeTooltipState() {
-    this.#captureNativeTooltip();
-    const tooltip = this.nativeTooltip;
-    if (!tooltip || tooltip.destroyed) return;
-    const flying = (this.displayElevation > 0) || (this.targetElevation > 0);
-
-    const shouldHide = flying && !this.settings.enableHeightLabel;
-    if (shouldHide && !this.tooltipHiddenByModule) {
-      this.tooltipRenderableBeforeModule = tooltip.renderable;
-      tooltip.renderable = false;
-      this.tooltipHiddenByModule = true;
-    } else if (!shouldHide && this.tooltipHiddenByModule) {
-      if (tooltip.renderable === false) tooltip.renderable = this.tooltipRenderableBeforeModule;
-      this.tooltipHiddenByModule = false;
-    }
-
-    const shouldAnimateAlpha = flying && this.settings.enableHeightLabel && (this.labelAlpha < 0.999);
-    if (shouldAnimateAlpha) {
-      if (!this.tooltipAlphaAnimatedByModule) {
-        this.tooltipAlphaBeforeModule = tooltip.alpha;
-        this.tooltipAlphaAnimatedByModule = true;
-        this.tooltipAlphaYielded = false;
-      } else if (!this.tooltipAlphaYielded
-        && (Math.abs(tooltip.alpha - this.tooltipLastWrittenAlpha) > VISUAL_EPSILON)) {
-        // A later module now owns tooltip alpha. Yield for the remainder of
-        // this transition instead of overwriting or restoring its value.
-        this.tooltipAlphaYielded = true;
-      }
-      if (!this.tooltipAlphaYielded) {
-        this.tooltipLastWrittenAlpha = this.tooltipAlphaBeforeModule * this.labelAlpha;
-        tooltip.alpha = this.tooltipLastWrittenAlpha;
-      }
-    } else if (this.tooltipAlphaAnimatedByModule) {
-      if (!this.tooltipAlphaYielded
-        && (Math.abs(tooltip.alpha - this.tooltipLastWrittenAlpha) <= VISUAL_EPSILON)) {
-        tooltip.alpha = this.tooltipAlphaBeforeModule;
-      }
-      this.tooltipAlphaAnimatedByModule = false;
-      this.tooltipAlphaYielded = false;
-    }
-  }
-
-  #restoreNativeTooltip() {
-    const tooltip = this.nativeTooltip;
-    if (tooltip && !tooltip.destroyed) {
-      if (this.tooltipHiddenByModule && (tooltip.renderable === false)) {
-        tooltip.renderable = this.tooltipRenderableBeforeModule;
-      }
-      if (this.tooltipAlphaAnimatedByModule
-        && !this.tooltipAlphaYielded
-        && (Math.abs(tooltip.alpha - this.tooltipLastWrittenAlpha) <= VISUAL_EPSILON)) {
-        tooltip.alpha = this.tooltipAlphaBeforeModule;
-      }
-    }
-    this.nativeTooltip = null;
-    this.tooltipHiddenByModule = false;
-    this.tooltipAlphaAnimatedByModule = false;
-    this.tooltipAlphaYielded = false;
   }
 
   #renderAnimationFrame(now, { force = false } = {}) {
@@ -453,8 +339,7 @@ export class FlyingTokenVisual {
     meshBaseRefreshed = false,
     meshScaleBaseRefreshed = false,
     meshAlphaBaseRefreshed = false,
-    uiBaseRefreshed = false,
-    uiRetainsOwnedOffset = false
+    uiBaseRefreshed = false
   } = {}) {
     const metrics = this.metrics;
     if (!metrics) return;
@@ -466,7 +351,6 @@ export class FlyingTokenVisual {
       meshScaleBaseRefreshed,
       meshAlphaBaseRefreshed,
       uiBaseRefreshed,
-      uiRetainsOwnedOffset,
       externalLayout: this.zScatterCompatibility.state
     });
     this.liftEnabled = enabled;
@@ -568,11 +452,6 @@ export class FlyingTokenVisual {
       liftY: (tokenMetrics?.offsetY ?? 0) + this.ambientOffsetY
     });
   }
-}
-
-function labelTransitionAlpha(progress, target, initialAlpha = 1) {
-  if (progress < 0.45) return initialAlpha * (1 - (progress / 0.45));
-  return target > 0 ? (progress - 0.45) / 0.55 : 0;
 }
 
 /** Small deterministic FNV-1a hash; avoids synchronized ambient motion. */

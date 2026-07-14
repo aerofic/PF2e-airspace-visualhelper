@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.2 — Untouched Native Elevation Labels
+
+- Removed all writes to Foundry/PF2e native elevation tooltip and Level-indicator positions; they now remain exactly where core places them instead of following lifted Token artwork.
+- Removed native elevation-label alpha animation and renderable toggling so the module cannot change their appearance or visibility.
+- Removed the obsolete `Enable Height Label` client setting; Foundry/PF2e now has exclusive ownership of native height-number presentation.
+- Kept airborne Mesh lift, artwork UI, acrylic stands, shadows, HUD data, and Z Scatter selection compatibility independent from native elevation UI.
+- Added regression coverage for position, visibility, alpha, core refreshes, animation, Z Scatter layouts, later third-party writes, and teardown.
+
 ## 0.4.1 — Adaptive HUD and Z Scatter Compatibility
 
 - Replaced absolute 5 ft pixel spacing with compact relative visual levels while preserving every Token's exact elevation and strict high-to-low ordering.

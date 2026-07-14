@@ -257,7 +257,6 @@ export function calculateVisualMetrics({
   const perspectiveGrowth = Math.min(0.04, (safeGridSize * 0.02) / equivalentRadius);
   const perspectiveScale = 1 + (signal * perspectiveGrowth);
   const alphaMultiplier = 1 - (0.045 * signal);
-  const labelNudge = takeoff * clamp(safeGridSize * 0.075, 6, 14);
 
   const dashLength = clamp(safeGridSize * 0.065, 5, 10);
   const projectionFalloff = 1 - (0.46 * signal);
@@ -272,9 +271,7 @@ export function calculateVisualMetrics({
       centerY: pose.tokenCenter.y,
       scale: perspectiveScale,
       alpha: alphaMultiplier,
-      bobAmplitude: takeoff * clamp(safeGridSize * (0.008 + (signal * 0.004)), 0.7, 1.4),
-      labelOffsetX: -labelNudge,
-      labelOffsetY: -(labelNudge * 0.72)
+      bobAmplitude: takeoff * clamp(safeGridSize * (0.008 + (signal * 0.004)), 0.7, 1.4)
     },
     stand: {
       topX: pose.standTop.x,
@@ -408,9 +405,7 @@ function emptyMetrics({ pose, width, height }) {
       centerY: ground.y,
       scale: 1,
       alpha: 1,
-      bobAmplitude: 0,
-      labelOffsetX: 0,
-      labelOffsetY: 0
+      bobAmplitude: 0
     },
     stand: {
       topX: ground.x,

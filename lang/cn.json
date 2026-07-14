@@ -7,8 +7,6 @@
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableGroundProjection.hint": "以不参与交互的地面提示标明 Foundry 的真实 Token footprint，并使用克制的投影引导线。",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableHeightAxis.name": "启用高度轴",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableHeightAxis.hint": "主动展开 HUD 详情后使用节省空间的相对高度轴，每个 Token 仍显示精确 elevation；关闭后改为紧凑 Token 列表。",
-  "PF2E_FLYING_VISUAL_HELPER.Settings.enableHeightLabel.name": "启用高度标签",
-  "PF2E_FLYING_VISUAL_HELPER.Settings.enableHeightLabel.hint": "保留 Foundry VTT 原生 elevation tooltip 与 Level 指示，只随抬升模型调整布局，不替换文字或单位。",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableStand.name": "启用透明支架",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableStand.hint": "在 Foundry 计算的 Token footprint 中心与抬升模型之间绘制分层亚克力杆体、固定透明地面盘和连接头。",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableShadow.name": "启用高度阴影",
