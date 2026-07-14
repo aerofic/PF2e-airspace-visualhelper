@@ -82,7 +82,11 @@ test("layers a restrained acrylic body, plate, pin, connector, and SCREEN highli
   renderer.render(metrics, true);
   assert.equal(body.visible, true);
   assert.equal(specular.visible, true);
-  assert.ok(body.commands.filter(command => command[0] === "drawPolygon").length >= 3);
+  assert.equal(
+    body.commands.filter(command => command[0] === "drawPolygon").length,
+    3,
+    "only shaft, bottom pin, and compact connector sleeve are drawn"
+  );
   assert.ok(body.commands.filter(command => command[0] === "drawEllipse").length >= 2);
   assert.ok(specular.commands.filter(command => command[0] === "drawEllipse").length >= 3);
   assert.equal(
@@ -96,6 +100,12 @@ test("layers a restrained acrylic body, plate, pin, connector, and SCREEN highli
   assert.ok(lineWidths.length >= 5);
   assert.ok(Math.max(...lineWidths) <= 1.5, "no wide laser-like stroke is emitted");
   assert.equal(lineWidths.at(-1), 0, "the air accent must not inherit a bright shaft outline");
+  assert.ok(
+    Math.max(...body.commands
+      .filter(command => command[0] === "beginFill")
+      .map(command => command[2])) >= 0.19,
+    "acrylic plate should retain the denser physical treatment"
+  );
 
   renderer.render(metrics, false);
   assert.equal(body.visible, false);

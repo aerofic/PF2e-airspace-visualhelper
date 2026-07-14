@@ -169,19 +169,19 @@ function drawBase(body, specular, base, { opacity, width }) {
     Math.max(0, radiusY * 0.65)
   );
 
-  // Darker underside plus a very pale top surface makes the plate feel thick
-  // without putting an opaque disk over the map texture.
-  body.beginFill(ACRYLIC_UNDERSIDE_COLOR, Math.min(0.12, opacity * 0.16))
+  // A visibly denser underside and top surface give the plate physical
+  // presence while preserving enough transparency to read the map beneath.
+  body.beginFill(ACRYLIC_UNDERSIDE_COLOR, Math.min(0.26, opacity * 0.38))
     .drawEllipse(x, y + thickness, radiusX, radiusY)
     .endFill();
-  body.beginFill(ACRYLIC_BODY_COLOR, Math.min(0.1, opacity * 0.14))
+  body.beginFill(ACRYLIC_BODY_COLOR, Math.min(0.22, opacity * 0.34))
     .drawEllipse(x, y, radiusX, radiusY)
     .endFill();
 
   specular.lineStyle(
     clamp(width * 0.22, 1, 1.5),
     ACRYLIC_EDGE_COLOR,
-    Math.min(0.38, opacity * 0.65)
+    Math.min(0.52, opacity * 0.82)
   ).drawEllipse(x, y + (thickness * 0.32), radiusX, radiusY);
   specular.lineStyle(
     clamp(width * 0.13, 0.75, 1),

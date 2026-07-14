@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.13 — Denser Base Without Clamp
+
+- Restored only the denser acrylic plate requested from 0.4.11: stronger top material, underside depth, and refractive outer edge.
+- Kept enough transparency for the battlemap to remain visible beneath the fixed ground plate.
+- Kept the 0.4.12 clamp removal complete: no crossbar, rectangular bracket, side jaws, or clamp-only geometry metrics were restored.
+- Retained the original compact top connector sleeve and every unrelated 0.4.10–0.4.12 improvement.
+- Added a regression assertion for the denser plate plus an exact three-polygon assertion preventing the removed clamp geometry from returning.
+
 ## 0.4.12 — Remove Top Clamp Experiment
 
 - Removed the complete 0.4.11 crossbar-and-jaw clamp experiment after in-game evaluation showed an unnatural rectangular bracket beneath circular Token art.
