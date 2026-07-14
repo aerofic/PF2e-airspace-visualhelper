@@ -66,7 +66,15 @@ export class FlyingTokenVisual {
     this.projectionGraphics = this.container.addChild(new PIXI.Graphics());
     this.standGraphics = this.container.addChild(new PIXI.Graphics());
     this.standSpecularGraphics = this.container.addChild(new PIXI.Graphics());
-    this.shadow = new ShadowRenderer(this.shadowGraphics);
+    // Added after the legacy Graphics children to keep stable child indices
+    // for integrations, while zIndex places the two silhouettes around the
+    // rod/contact Graphics at render time.
+    this.shadowPenumbraSprite = this.container.addChild(new PIXI.Sprite());
+    this.shadowCoreSprite = this.container.addChild(new PIXI.Sprite());
+    this.shadow = new ShadowRenderer(this.shadowGraphics, {
+      penumbraSprite: this.shadowPenumbraSprite,
+      coreSprite: this.shadowCoreSprite
+    });
     this.projection = new ProjectionRenderer(this.projectionGraphics);
     this.stand = new FlyingStand(this.standGraphics, this.standSpecularGraphics);
     this.tokenLift = new TokenLiftRenderer(token);
@@ -248,7 +256,7 @@ export class FlyingTokenVisual {
       || flags.redraw;
     const meshAlphaBaseRefreshed = flags.refreshState || flags.refreshMesh || flags.redraw;
     if (positionRefreshed) this.#syncPosition();
-    if (flags.refreshSize || flags.refreshShape || flags.redraw) {
+    if (flags.refreshSize || flags.refreshShape || flags.refreshMesh || flags.redraw) {
       this.render({
         meshBaseRefreshed: positionRefreshed,
         meshScaleBaseRefreshed,
@@ -384,7 +392,13 @@ export class FlyingTokenVisual {
   #renderGeometry() {
     const metrics = this.metrics;
     if (!metrics) return;
-    this.shadow.render(metrics, this.settings.enableShadow);
+    const mesh = this.token.mesh;
+    this.shadow.render(metrics, this.settings.enableShadow, {
+      texture: mesh?.texture ?? null,
+      rotation: mesh?.rotation ?? 0,
+      anchorX: mesh?.anchor?.x ?? 0.5,
+      anchorY: mesh?.anchor?.y ?? 0.5
+    });
     this.#renderProjection();
     this.#renderStand();
   }

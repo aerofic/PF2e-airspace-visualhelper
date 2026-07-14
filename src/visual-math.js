@@ -20,6 +20,9 @@ export function normalizeHudElevation(value) {
 // additions and distance calculations.
 const MAX_CANVAS_DIMENSION = 1_000_000;
 const MAX_HEIGHT_STEPS = 1_000_000;
+const SHADOW_PROJECTION_PER_STEP = 0.1;
+const SHADOW_DIRECTION_X = Math.sqrt(3) / 2;
+const SHADOW_DIRECTION_Y = -0.5;
 
 /** A continuous elevation response shared by every visual component. */
 export function calculateHeightCurve(elevation, gridDistance = 5) {
@@ -171,39 +174,37 @@ export function calculateVisualMetrics({
   const normalizedStandOpacity = clamp(finiteOr(standOpacity, 0), 0, 1);
   const normalizedShadowOpacity = clamp(finiteOr(shadowOpacity, 0), 0, 1);
   const normalizedProjectionOpacity = clamp(finiteOr(projectionOpacity, 0), 0, 1);
-  // The actual plate is concentric with the Token in a top-down view. Its
-  // refractive rim extends only a few pixels beyond the artwork so the plate
-  // remains visible without pretending to occupy a second grid square.
+  // Keep the established dense acrylic base: its refractive rim extends only
+  // a few pixels past the artwork and is independent from the cast shadow.
   const rimOvershoot = clamp(safeGridSize * 0.045, 3, 7);
   const baseRadiusX = (width * 0.5) + rimOvershoot;
   const baseRadiusY = (height * 0.5) + rimOvershoot;
   const baseThickness = clamp(safeGridSize * 0.015, 1, 3);
 
   const distanceMultiplier = clamp(finiteOr(shadowDistanceMultiplier, 1), 0.25, 3);
-  const desiredShadowDistance = safeGridSize * clamp(
-    (0.18 + (0.5 * signal)) * distanceMultiplier,
-    0.08,
-    0.9
+  // Shadow projection begins at exactly zero and remains linear through the
+  // tactical range: every elevation grid-step adds 10% of one Canvas grid at
+  // the default multiplier. Only an extreme-geometry safety cap is applied.
+  const desiredShadowDistance = Math.min(
+    MAX_CANVAS_DIMENSION,
+    safeGridSize * pose.heightCurve.steps * SHADOW_PROJECTION_PER_STEP * distanceMultiplier
   );
-  // The cast shadow is the primary height cue. Keep it broad and readable at
-  // altitude instead of shrinking and fading it into the map texture.
-  const shadowScale = 0.98 - (0.1 * signal);
-  const shadowFalloff = 1 - (0.18 * signal);
-  // A horizontal Token disc keeps its top-down silhouette when elevated. Use
-  // the artwork footprint rather than a flattened side-view ellipse.
-  const shadowRadiusX = Math.min(width * 0.5 * shadowScale, safeGridSize * 4);
-  const shadowRadiusY = Math.min(height * 0.5 * shadowScale, safeGridSize * 4);
-  // A height-cast shadow may leave the original Token footprint. Confining it
-  // to one grid square erased most of the visible offset at useful heights.
-  // Foundry Canvas uses positive Y downward. A positive X and negative Y
-  // therefore makes every cast shadow travel toward the screen's upper-right.
-  const shadowX = pose.ground.x + (desiredShadowDistance * 0.88);
-  const shadowY = pose.ground.y - (desiredShadowDistance * 0.47);
-  // This is the plate's subtle ground contact, not a visible side-view shaft.
-  const contactRadiusX = baseRadiusX * 0.94;
-  const contactRadiusY = baseRadiusY * 0.94;
-  const contactCoreRadiusX = baseRadiusX * 0.82;
-  const contactCoreRadiusY = baseRadiusY * 0.82;
+  const shadowX = pose.ground.x + (desiredShadowDistance * SHADOW_DIRECTION_X);
+  const shadowY = pose.ground.y + (desiredShadowDistance * SHADOW_DIRECTION_Y);
+  const shadowSoftness = clamp(pose.heightCurve.steps * 0.006, 0.015, 0.18);
+  const shadowFalloff = 0.9 - (0.12 * signal);
+  const shadowRadiusX = Math.min(width * 0.5, safeGridSize * 4);
+  const shadowRadiusY = Math.min(height * 0.5, safeGridSize * 4);
+  // The acrylic rod has a fixed physical diameter. Elevation changes the
+  // length of its cast, never the apparent width of the object casting it.
+  const shaftShadowWidth = clamp(safeGridSize * 0.03, 2.25, 5.5);
+  const shaftShadowAlpha = normalizedShadowOpacity * takeoff * (0.74 - (0.08 * signal));
+  // Only the small rod foot contacts the ground; a Token-sized concentric
+  // contact disc was the source of the misleading halo in 0.5.0.
+  const contactRadiusX = clamp(safeGridSize * 0.07, 5, 10);
+  const contactRadiusY = contactRadiusX * 0.72;
+  const contactCoreRadiusX = contactRadiusX * 0.52;
+  const contactCoreRadiusY = contactRadiusY * 0.5;
   const contactX = pose.ground.x;
   const contactY = pose.ground.y + (baseThickness * 0.5);
 
@@ -261,21 +262,27 @@ export function calculateVisualMetrics({
       y: shadowY,
       radiusX: shadowRadiusX,
       radiusY: shadowRadiusY,
+      width: Math.min(width, safeGridSize * 8),
+      height: Math.min(height, safeGridSize * 8),
       alpha: normalizedShadowOpacity * shadowFalloff * takeoff,
+      distance: desiredShadowDistance,
+      directionX: SHADOW_DIRECTION_X,
+      directionY: SHADOW_DIRECTION_Y,
+      softness: shadowSoftness,
       shaftStartX: pose.ground.x,
       shaftStartY: pose.ground.y,
-      shaftEndX: pose.ground.x,
-      shaftEndY: pose.ground.y,
-      shaftWidth: 0,
-      shaftAlpha: 0,
+      shaftEndX: shadowX,
+      shaftEndY: shadowY,
+      shaftWidth: shaftShadowWidth,
+      shaftAlpha: shaftShadowAlpha,
       contactX,
       contactY,
       contactRadiusX,
       contactRadiusY,
       contactCoreRadiusX,
       contactCoreRadiusY,
-      contactAlpha: normalizedShadowOpacity * 0.22 * takeoff,
-      contactCoreAlpha: normalizedShadowOpacity * 0.16 * takeoff
+      contactAlpha: normalizedShadowOpacity * 0.42 * takeoff,
+      contactCoreAlpha: normalizedShadowOpacity * 0.58 * takeoff
     },
     projection: {
       startX: pose.ground.x,
@@ -394,7 +401,13 @@ function emptyMetrics({ pose, width, height }) {
       y: ground.y,
       radiusX: 0,
       radiusY: 0,
+      width: 0,
+      height: 0,
       alpha: 0,
+      distance: 0,
+      directionX: SHADOW_DIRECTION_X,
+      directionY: SHADOW_DIRECTION_Y,
+      softness: 0,
       shaftStartX: ground.x,
       shaftStartY: ground.y,
       shaftEndX: ground.x,

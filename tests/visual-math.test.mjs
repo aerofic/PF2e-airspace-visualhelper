@@ -269,8 +269,8 @@ test("swapping width and height preserves perspective and exposes only a bounded
       assertApproximatelyEqual(portrait.token.scale, landscape.token.scale, 1e-9);
       assertApproximatelyEqual(portrait.token.alpha, landscape.token.alpha, 1e-9);
 
-      // The concentric plate intentionally extends 3-7 px past the artwork so
-      // its refractive rim survives beneath a circular Token frame.
+      // The acrylic plate remains independent from the rewritten cast shadow
+      // and retains its established 3-7 px refractive rim.
       for (const [metrics, footprintWidth, footprintHeight] of [
         [portrait, width, height],
         [landscape, height, width]
@@ -284,20 +284,24 @@ test("swapping width and height preserves perspective and exposes only a bounded
         assert.ok(Math.hypot(
           metrics.shadow.x - metrics.base.x,
           metrics.shadow.y - metrics.base.y
-        ) <= 90 + 1e-9);
+        ) <= 1_000_000 + 1e-9);
       }
     }
   }
 });
 
-test("shadow becomes smaller and fainter with elevation", () => {
+test("Token silhouette keeps its true size while height increases softness and falloff", () => {
   const low = calculateVisualMetrics({ ...base, elevation: 10 });
   const high = calculateVisualMetrics({ ...base, elevation: 120 });
-  assert.ok(high.shadow.radiusX < low.shadow.radiusX);
+  assert.equal(high.shadow.radiusX, low.shadow.radiusX);
+  assert.equal(high.shadow.radiusY, low.shadow.radiusY);
+  assert.equal(high.shadow.width, low.shadow.width);
+  assert.equal(high.shadow.height, low.shadow.height);
+  assert.ok(high.shadow.softness > low.shadow.softness);
   assert.ok(high.shadow.alpha < low.shadow.alpha);
 });
 
-test("keeps a prominent disc cast and restrained concentric plate contact at tactical elevation", () => {
+test("keeps a prominent real-size cast and projects the rod to it at tactical elevation", () => {
   const metrics = calculateVisualMetrics({
     ...base,
     elevation: 60,
@@ -308,42 +312,53 @@ test("keeps a prominent disc cast and restrained concentric plate contact at tac
     metrics.shadow.y - metrics.base.y
   );
 
-  assert.ok(distance > 50, "60 ft shadow should visibly leave the ground marker");
+  assertApproximatelyEqual(distance, 120);
   assert.ok(metrics.shadow.alpha > 0.4, "cast shadow should survive height falloff");
-  assert.ok(metrics.shadow.radiusX > 28, "cast shadow should retain readable area");
+  assert.equal(metrics.shadow.width, 100);
+  assert.equal(metrics.shadow.height, 100);
   assert.deepEqual(
     [metrics.shadow.shaftStartX, metrics.shadow.shaftStartY],
     [metrics.base.x, metrics.base.y]
   );
   assert.deepEqual(
     [metrics.shadow.shaftEndX, metrics.shadow.shaftEndY],
-    [metrics.base.x, metrics.base.y]
+    [metrics.shadow.x, metrics.shadow.y]
   );
-  assert.equal(metrics.shadow.shaftWidth, 0);
-  assert.equal(metrics.shadow.shaftAlpha, 0);
-  assert.ok(metrics.shadow.contactAlpha >= 0.1, "plate contact halo should remain grounded");
-  assert.ok(metrics.shadow.contactCoreAlpha >= 0.07, "contact core should remain distinct");
+  assert.ok(metrics.shadow.shaftWidth > 0);
+  assert.ok(metrics.shadow.shaftAlpha > 0);
+  assert.ok(metrics.shadow.x > metrics.base.x);
+  assert.ok(metrics.shadow.y < metrics.base.y);
+  assert.ok(metrics.shadow.contactRadiusX <= 10, "rod foot must remain much smaller than a Token");
+  assert.ok(metrics.shadow.contactAlpha >= 0.1, "rod contact should remain grounded");
+  assert.ok(metrics.shadow.contactCoreAlpha >= 0.07, "rod contact core should remain distinct");
 });
 
-test("cast shadow drifts outward while shrinking and fading after takeoff", () => {
-  const elevations = [1, 5, 30, 100, 1_000];
-  const samples = elevations.map(elevation => calculateVisualMetrics({ ...base, elevation }));
-  const distances = samples.map(metrics => Math.hypot(
-    metrics.shadow.x - metrics.base.x,
-    metrics.shadow.y - metrics.base.y
-  ));
+test("shadow projection starts at zero and grows linearly with elevation", () => {
+  const zero = calculateVisualMetrics({ ...base, elevation: 0 });
+  assert.equal(zero.shadow.distance, 0);
 
-  for (let index = 1; index < distances.length; index += 1) {
-    assert.ok(distances[index] >= distances[index - 1]);
-    assert.ok(samples[index].shadow.radiusX < samples[index - 1].shadow.radiusX);
-    assert.ok(samples[index].shadow.radiusY < samples[index - 1].shadow.radiusY);
-  }
-  for (let index = 2; index < samples.length; index += 1) {
-    assert.ok(samples[index].shadow.alpha < samples[index - 1].shadow.alpha);
+  for (const [elevation, expectedDistance] of [
+    [5, 10],
+    [10, 20],
+    [20, 40],
+    [60, 120],
+    [100, 200],
+    [1_200, 2_400]
+  ]) {
+    const metrics = calculateVisualMetrics({ ...base, elevation });
+    const deltaX = metrics.shadow.x - metrics.base.x;
+    const deltaY = metrics.shadow.y - metrics.base.y;
+    const distance = Math.hypot(deltaX, deltaY);
+    assertApproximatelyEqual(metrics.shadow.distance, expectedDistance);
+    assertApproximatelyEqual(distance, expectedDistance);
+    assertApproximatelyEqual(deltaX / distance, Math.sqrt(3) / 2);
+    assertApproximatelyEqual(deltaY / distance, -0.5);
+    assert.equal(metrics.shadow.width, 100);
+    assert.equal(metrics.shadow.height, 100);
   }
 });
 
-test("top-down rod emits no impossible side-view shaft shadow", () => {
+test("rod projection runs from the footprint to the upper-right Token projection", () => {
   const samples = [5, 30, 100]
     .map(elevation => calculateVisualMetrics({ ...base, elevation }));
   for (const metrics of samples) {
@@ -353,10 +368,17 @@ test("top-down rod emits no impossible side-view shaft shadow", () => {
     );
     assert.deepEqual(
       [metrics.shadow.shaftEndX, metrics.shadow.shaftEndY],
-      [metrics.base.x, metrics.base.y]
+      [metrics.shadow.x, metrics.shadow.y]
     );
-    assert.equal(metrics.shadow.shaftAlpha, 0);
-    assert.equal(metrics.shadow.shaftWidth, 0);
+    assert.ok(metrics.shadow.shaftAlpha > 0);
+    assert.ok(metrics.shadow.shaftWidth > 0);
+    assertApproximatelyEqual(
+      Math.hypot(
+        metrics.shadow.shaftEndX - metrics.shadow.shaftStartX,
+        metrics.shadow.shaftEndY - metrics.shadow.shaftStartY
+      ),
+      metrics.shadow.distance
+    );
     assert.ok(metrics.shadow.x > metrics.base.x);
     assert.ok(metrics.shadow.y < metrics.base.y);
   }
@@ -411,7 +433,7 @@ test("ground projection is concentric with the fixed acrylic plate and fades wit
   assert.ok(high.projection.alpha < low.projection.alpha);
 });
 
-test("bounds the exposed plate rim, concentric contact, and displaced cast shadow", () => {
+test("bounds the exposed plate rim, compact rod contact, and displaced cast shadow", () => {
   const metrics = calculateVisualMetrics({
     ...base,
     elevation: 1_000_000,
@@ -424,7 +446,7 @@ test("bounds the exposed plate rim, concentric contact, and displaced cast shado
   assert.ok(Math.hypot(
     metrics.shadow.x - metrics.base.x,
     metrics.shadow.y - metrics.base.y
-  ) <= 90 + 1e-9);
+  ) <= 1_000_000 + 1e-9);
   assert.ok(metrics.shadow.radiusX <= 50);
   assert.ok(metrics.shadow.radiusY <= 50);
   assert.equal(metrics.shadow.contactX, metrics.base.x);

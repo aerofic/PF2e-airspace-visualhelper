@@ -20,6 +20,34 @@ class FakeGraphics {
   endFill() { this.commands.push(["endFill"]); return this; }
 }
 
+class FakePoint {
+  constructor(x = 0, y = 0) {
+    this.x = x;
+    this.y = y;
+  }
+
+  set(x, y) {
+    this.x = x;
+    this.y = y;
+  }
+}
+
+class FakeSprite {
+  constructor() {
+    this.position = new FakePoint();
+    this.anchor = new FakePoint(0.5, 0.5);
+    this.visible = false;
+    this.alpha = 1;
+    this.width = 0;
+    this.height = 0;
+    this.rotation = 0;
+    this.texture = null;
+  }
+
+  get x() { return this.position.x; }
+  get y() { return this.position.y; }
+}
+
 globalThis.PIXI = {
   BLEND_MODES: {
     NORMAL: "normal",
@@ -51,23 +79,29 @@ const metrics = {
   },
   connector: { x: 50, y: 50, length: 0, width: 7, radius: 6 },
   shadow: {
-    x: 59,
-    y: 31,
-    radiusX: 46,
-    radiusY: 46,
+    x: 84.64,
+    y: 30,
+    radiusX: 50,
+    radiusY: 50,
+    width: 100,
+    height: 100,
     alpha: 0.3,
+    distance: 40,
+    directionX: Math.sqrt(3) / 2,
+    directionY: -0.5,
+    softness: 0.05,
     shaftStartX: 50,
     shaftStartY: 50,
-    shaftEndX: 50,
-    shaftEndY: 50,
-    shaftWidth: 0,
-    shaftAlpha: 0,
+    shaftEndX: 84.64,
+    shaftEndY: 30,
+    shaftWidth: 4,
+    shaftAlpha: 0.28,
     contactX: 50,
     contactY: 52,
-    contactRadiusX: 52,
-    contactRadiusY: 52,
-    contactCoreRadiusX: 45,
-    contactCoreRadiusY: 45,
+    contactRadiusX: 8,
+    contactRadiusY: 6,
+    contactCoreRadiusX: 4,
+    contactCoreRadiusY: 3,
     contactAlpha: 0.12,
     contactCoreAlpha: 0.09
   }
@@ -122,32 +156,50 @@ test("draws a concentric top-down acrylic rim and circular rod end", () => {
   assert.deepEqual(specular.commands, []);
 });
 
-test("uses four top-down Token and two concentric contact shadow layers without filters", () => {
+test("projects the rod and reuses the Token texture for a real silhouette", () => {
   const graphics = new FakeGraphics();
-  const renderer = new ShadowRenderer(graphics);
+  const penumbra = new FakeSprite();
+  const core = new FakeSprite();
+  const renderer = new ShadowRenderer(graphics, {
+    penumbraSprite: penumbra,
+    coreSprite: core
+  });
+  const texture = { id: "token-texture", destroyed: false };
 
   assert.equal(graphics.eventMode, "none");
   assert.equal(graphics.blendMode, "multiply");
   assert.equal(graphics.zIndex, 0);
   assert.equal(graphics.filters, undefined);
 
-  renderer.render(metrics, true);
+  renderer.render(metrics, true, { texture, rotation: 0.25, anchorX: 0.5, anchorY: 0.5 });
   assert.equal(graphics.visible, true);
   assert.equal(
     graphics.commands.filter(command => command[0] === "beginFill").length,
-    6
+    4
   );
-  assert.equal(graphics.commands.filter(command => command[0] === "drawPolygon").length, 4);
+  assert.equal(graphics.commands.filter(command => command[0] === "drawPolygon").length, 2);
   const fills = graphics.commands.filter(command => command[0] === "beginFill");
   assert.ok(
     fills.every(command => command[2] > 0 && command[2] <= 0.42),
     "each physical layer remains translucent even though their overlap is dense"
   );
-  const castOpacity = fills.slice(0, 4)
-    .reduce((combined, command) => 1 - ((1 - combined) * (1 - command[2])), 0);
-  assert.ok(castOpacity > 0.35, "layered cast shadow should remain clearly readable");
+  assert.equal(core.texture, texture);
+  assert.equal(penumbra.texture, texture);
+  assert.equal(core.visible, true);
+  assert.equal(penumbra.visible, true);
+  assert.equal(core.x, metrics.shadow.x);
+  assert.equal(core.y, metrics.shadow.y);
+  assert.equal(core.width, metrics.shadow.width);
+  assert.equal(core.height, metrics.shadow.height);
+  assert.equal(core.rotation, 0.25);
+  assert.ok(penumbra.width > core.width);
+  assert.ok(core.alpha > penumbra.alpha);
+  assert.equal(core.eventMode, "none");
+  assert.equal(core.blendMode, "multiply");
 
   renderer.render(metrics, false);
   assert.equal(graphics.visible, false);
+  assert.equal(core.visible, false);
+  assert.equal(penumbra.visible, false);
   assert.deepEqual(graphics.commands, []);
 });

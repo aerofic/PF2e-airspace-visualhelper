@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.1 — Linear Texture-Accurate Height Shadows
+
+- Replaced the 0.5.0 concentric circular shadow approximation with two non-interactive PIXI Sprites that share the current Token texture and preserve its real alpha silhouette.
+- Made upper-right projection distance begin at exactly zero and grow linearly with elevation; at the default multiplier, each 5 ft adds one tenth of a Canvas grid until the extreme-geometry safety cap.
+- Projected the acrylic rod from the exact Foundry footprint to the Token silhouette, giving the complete support-plus-model assembly one continuous light direction.
+- Kept the projected Token at its real footprint size while elevation increases travel and penumbra softness instead of incorrectly shrinking it into a disc.
+- Reduced the ground contact to a compact rod-foot shadow while preserving the established dense acrylic plate and its refractive rings as a separate material cue.
+- Reuses Foundry's texture without RenderTexture, filters, per-frame geometry allocation, interaction, or document writes; mesh refreshes immediately replace both projected silhouettes.
+- Preserved native elevation labels, HUD behavior, Z Scatter compatibility, movement and targeting, PF2e rules, and all TokenDocument coordinates.
+- Added regression coverage for zero-origin linearity, fixed upper-right direction, true-size silhouettes, rod continuity, texture replacement, finite safety bounds, and renderer teardown.
+
 ## 0.5.0 — Top-Down Tactical Flight Plates
 
 - Replaced the side-view raised-model composition with a top-down tactical mode: Token art now remains concentric with its rules footprint and uses at most roughly six pixels of visual parallax.

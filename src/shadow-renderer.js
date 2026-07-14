@@ -1,109 +1,135 @@
-const SHADOW_COLOR = 0x071014;
+const SHADOW_COLOR = 0x061014;
 
-/** Soft projected shadow renderer; avoids one BlurFilter allocation per Token. */
+/**
+ * Directional top-down shadow renderer.
+ *
+ * Graphics owns only the projected acrylic rod and its small ground contact.
+ * When supplied, two PIXI Sprites reuse the Token mesh texture so the cast
+ * shadow preserves the real transparent silhouette instead of approximating
+ * it with concentric circles. No texture, RenderTexture, or filter is created.
+ */
 export class ShadowRenderer {
-  constructor(graphics) {
+  constructor(graphics, { penumbraSprite = null, coreSprite = null } = {}) {
     this.graphics = graphics;
+    this.penumbraSprite = penumbraSprite;
+    this.coreSprite = coreSprite;
+
     graphics.eventMode = "none";
-    graphics.blendMode = globalThis.PIXI?.BLEND_MODES?.MULTIPLY ?? graphics.blendMode ?? 0;
+    graphics.blendMode = multiplyBlend(graphics.blendMode);
     graphics.zIndex = 0;
+    configureStaticSprite(penumbraSprite, -1);
+    configureStaticSprite(coreSprite, 1);
   }
 
-  render(metrics, enabled) {
+  render(metrics, enabled, {
+    texture = null,
+    rotation = 0,
+    anchorX = 0.5,
+    anchorY = 0.5
+  } = {}) {
     const graphics = this.graphics;
-    graphics.clear();
     const shadow = metrics.shadow;
-    graphics.visible = Boolean(
+    graphics.clear();
+
+    const visible = Boolean(
       metrics.flying
       && enabled
       && ((shadow.alpha > 0)
+        || (shadow.shaftAlpha > 0)
         || (shadow.contactAlpha > 0)
         || (shadow.contactCoreAlpha > 0))
     );
-    if (!graphics.visible) return;
+    graphics.visible = visible;
+    if (!visible) {
+      hideSprite(this.penumbraSprite);
+      hideSprite(this.coreSprite);
+      return;
+    }
 
-    const {
-      x,
-      y,
-      radiusX,
-      radiusY,
-      alpha,
-      contactX,
-      contactY,
-      contactRadiusX,
-      contactRadiusY,
-      contactAlpha
-    } = shadow;
+    drawProjectedRod(graphics, shadow);
+    drawRodContact(graphics, shadow);
 
-    // A horizontal Token disc retains a near-identical silhouette from above.
-    // Four nested, direction-aligned shapes supply a soft trailing penumbra
-    // and dense base-facing edge without a per-Token BlurFilter allocation.
-    drawTokenCastShadow(graphics, shadow, { majorScale: 1.18, minorScale: 1.18, weight: 0.2 });
-    drawTokenCastShadow(graphics, shadow, { majorScale: 1.07, minorScale: 1.07, weight: 0.42 });
-    drawTokenCastShadow(graphics, shadow, { majorScale: 0.94, minorScale: 0.94, weight: 0.68 });
-    drawTokenCastShadow(graphics, shadow, {
-      majorScale: 0.78,
-      minorScale: 0.78,
-      weight: 0.86,
-      offsetAlong: -radiusX * 0.09
-    });
+    const canUseTexture = isUsableTexture(texture)
+      && this.penumbraSprite
+      && this.coreSprite;
+    if (canUseTexture) {
+      const pose = { texture, rotation, anchorX, anchorY };
+      drawTextureProjection(this.penumbraSprite, shadow, pose, {
+        expansion: 1 + finiteOr(shadow.softness, 0),
+        alphaWeight: 0.26,
+        trail: finiteOr(shadow.softness, 0) * finiteOr(shadow.width, 0) * 0.08
+      });
+      drawTextureProjection(this.coreSprite, shadow, pose, {
+        expansion: 1,
+        alphaWeight: 0.82,
+        trail: 0
+      });
+      return;
+    }
 
-    // The plate contact remains concentric with the Token. Most of these fills
-    // sit behind the artwork; only a restrained grounding halo is visible.
-    graphics.beginFill(SHADOW_COLOR, contactAlpha * 0.76)
-      .drawEllipse(contactX, contactY, contactRadiusX * 1.04, contactRadiusY * 1.04)
-      .endFill();
-    graphics.beginFill(
-      SHADOW_COLOR,
-      finiteOr(shadow.contactCoreAlpha, contactAlpha * 0.94)
-    ).drawEllipse(
-      contactX,
-      contactY,
-      finiteOr(shadow.contactCoreRadiusX, contactRadiusX * 0.86),
-      finiteOr(shadow.contactCoreRadiusY, contactRadiusY * 0.86)
-    ).endFill();
+    hideSprite(this.penumbraSprite);
+    hideSprite(this.coreSprite);
+    drawFallbackProjection(graphics, shadow);
   }
 }
 
-function drawTokenCastShadow(graphics, shadow, {
-  majorScale,
-  minorScale,
-  weight,
-  offsetAlong = 0
-}) {
-  const baseX = finiteOr(shadow?.contactX, shadow?.shaftStartX);
-  const baseY = finiteOr(shadow?.contactY, shadow?.shaftStartY);
-  const x = finiteOr(shadow?.x, baseX);
-  const y = finiteOr(shadow?.y, baseY);
-  const dx = x - baseX;
-  const dy = y - baseY;
+function drawProjectedRod(graphics, shadow) {
+  const startX = finiteOr(shadow?.shaftStartX, shadow?.contactX);
+  const startY = finiteOr(shadow?.shaftStartY, shadow?.contactY);
+  const endX = finiteOr(shadow?.shaftEndX, shadow?.x);
+  const endY = finiteOr(shadow?.shaftEndY, shadow?.y);
+  const alpha = clampedAlpha(shadow?.shaftAlpha);
+  const width = clamp(finiteOr(shadow?.shaftWidth, 0), 0, 64);
+  const dx = endX - startX;
+  const dy = endY - startY;
   const length = Math.hypot(dx, dy);
-  const axisX = length > 0 ? dx / length : 1;
-  const axisY = length > 0 ? dy / length : 0;
-  const normalX = -axisY;
-  const normalY = axisX;
-  const radiusMajor = Math.max(0, finiteOr(shadow?.radiusX, 0) * majorScale);
-  const radiusMinor = Math.max(0, finiteOr(shadow?.radiusY, 0) * minorScale);
-  const alpha = Math.min(1, Math.max(0, finiteOr(shadow?.alpha, 0) * weight));
-  if (!(radiusMajor > 0) || !(radiusMinor > 0) || !(alpha > 0)) return;
+  if (!(length > 0) || !(alpha > 0) || !(width > 0)) return;
 
-  const centerX = x + (axisX * offsetAlong);
-  const centerY = y + (axisY * offsetAlong);
-  const points = [];
-  const segments = 32;
-  for (let index = 0; index < segments; index += 1) {
-    const angle = (index / segments) * Math.PI * 2;
-    const along = Math.cos(angle) * radiusMajor;
-    const across = Math.sin(angle) * radiusMinor;
-    points.push(
-      centerX + (axisX * along) + (normalX * across),
-      centerY + (axisY * along) + (normalY * across)
-    );
-  }
-  drawFilledPolygon(graphics, points, alpha);
+  const normalX = -dy / length;
+  const normalY = dx / length;
+  const softness = clamp(finiteOr(shadow?.softness, 0), 0, 0.5);
+  drawRodPolygon(graphics, {
+    startX,
+    startY,
+    endX,
+    endY,
+    normalX,
+    normalY,
+    startHalfWidth: width * (0.62 + softness),
+    endHalfWidth: width * (0.8 + (softness * 1.5)),
+    alpha: alpha * 0.28
+  });
+  drawRodPolygon(graphics, {
+    startX,
+    startY,
+    endX,
+    endY,
+    normalX,
+    normalY,
+    startHalfWidth: width * 0.28,
+    endHalfWidth: width * (0.36 + (softness * 0.35)),
+    alpha: alpha * 0.78
+  });
 }
 
-function drawFilledPolygon(graphics, points, alpha) {
+function drawRodPolygon(graphics, data) {
+  const {
+    startX,
+    startY,
+    endX,
+    endY,
+    normalX,
+    normalY,
+    startHalfWidth,
+    endHalfWidth,
+    alpha
+  } = data;
+  const points = [
+    startX - (normalX * startHalfWidth), startY - (normalY * startHalfWidth),
+    startX + (normalX * startHalfWidth), startY + (normalY * startHalfWidth),
+    endX + (normalX * endHalfWidth), endY + (normalY * endHalfWidth),
+    endX - (normalX * endHalfWidth), endY - (normalY * endHalfWidth)
+  ];
   graphics.beginFill(SHADOW_COLOR, alpha);
   if (typeof graphics.drawPolygon === "function") graphics.drawPolygon(points);
   else {
@@ -116,7 +142,102 @@ function drawFilledPolygon(graphics, points, alpha) {
   graphics.endFill();
 }
 
+function drawRodContact(graphics, shadow) {
+  const alpha = clampedAlpha(shadow?.contactAlpha);
+  const coreAlpha = clampedAlpha(shadow?.contactCoreAlpha);
+  const x = finiteOr(shadow?.contactX, 0);
+  const y = finiteOr(shadow?.contactY, 0);
+  const radiusX = Math.max(0, finiteOr(shadow?.contactRadiusX, 0));
+  const radiusY = Math.max(0, finiteOr(shadow?.contactRadiusY, 0));
+  if ((alpha > 0) && (radiusX > 0) && (radiusY > 0)) {
+    graphics.beginFill(SHADOW_COLOR, alpha * 0.72)
+      .drawEllipse(x, y, radiusX, radiusY)
+      .endFill();
+  }
+  const coreRadiusX = Math.max(0, finiteOr(shadow?.contactCoreRadiusX, 0));
+  const coreRadiusY = Math.max(0, finiteOr(shadow?.contactCoreRadiusY, 0));
+  if ((coreAlpha > 0) && (coreRadiusX > 0) && (coreRadiusY > 0)) {
+    graphics.beginFill(SHADOW_COLOR, coreAlpha)
+      .drawEllipse(x, y, coreRadiusX, coreRadiusY)
+      .endFill();
+  }
+}
+
+function drawTextureProjection(sprite, shadow, pose, { expansion, alphaWeight, trail }) {
+  const directionX = finiteOr(shadow?.directionX, 1);
+  const directionY = finiteOr(shadow?.directionY, 0);
+  sprite.texture = pose.texture;
+  sprite.anchor?.set?.(
+    clamp(finiteOr(pose.anchorX, 0.5), 0, 1),
+    clamp(finiteOr(pose.anchorY, 0.5), 0, 1)
+  );
+  setPosition(
+    sprite,
+    finiteOr(shadow?.x, 0) + (directionX * trail),
+    finiteOr(shadow?.y, 0) + (directionY * trail)
+  );
+  sprite.width = Math.max(0, finiteOr(shadow?.width, 0) * expansion);
+  sprite.height = Math.max(0, finiteOr(shadow?.height, 0) * expansion);
+  sprite.rotation = finiteOr(pose.rotation, 0);
+  sprite.tint = SHADOW_COLOR;
+  sprite.alpha = clampedAlpha(shadow?.alpha) * alphaWeight;
+  sprite.visible = (sprite.width > 0) && (sprite.height > 0) && (sprite.alpha > 0);
+}
+
+function drawFallbackProjection(graphics, shadow) {
+  const alpha = clampedAlpha(shadow?.alpha);
+  const radiusX = Math.max(0, finiteOr(shadow?.radiusX, 0));
+  const radiusY = Math.max(0, finiteOr(shadow?.radiusY, 0));
+  if (!(alpha > 0) || !(radiusX > 0) || !(radiusY > 0)) return;
+  const softness = clamp(finiteOr(shadow?.softness, 0), 0, 0.5);
+  const x = finiteOr(shadow?.x, 0);
+  const y = finiteOr(shadow?.y, 0);
+  graphics.beginFill(SHADOW_COLOR, alpha * 0.24)
+    .drawEllipse(x, y, radiusX * (1 + softness), radiusY * (1 + softness))
+    .endFill();
+  graphics.beginFill(SHADOW_COLOR, alpha * 0.76)
+    .drawEllipse(x, y, radiusX, radiusY)
+    .endFill();
+}
+
+function configureStaticSprite(sprite, zIndex) {
+  if (!sprite) return;
+  sprite.eventMode = "none";
+  sprite.blendMode = multiplyBlend(sprite.blendMode);
+  sprite.zIndex = zIndex;
+  sprite.visible = false;
+  sprite.tint = SHADOW_COLOR;
+}
+
+function hideSprite(sprite) {
+  if (sprite) sprite.visible = false;
+}
+
+function isUsableTexture(texture) {
+  return !!texture && !texture.destroyed;
+}
+
+function multiplyBlend(fallback) {
+  return globalThis.PIXI?.BLEND_MODES?.MULTIPLY ?? fallback ?? 0;
+}
+
+function setPosition(displayObject, x, y) {
+  if (displayObject.position?.set) displayObject.position.set(x, y);
+  else {
+    displayObject.x = x;
+    displayObject.y = y;
+  }
+}
+
+function clampedAlpha(value) {
+  return clamp(finiteOr(value, 0), 0, 1);
+}
+
 function finiteOr(value, fallback) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
 }

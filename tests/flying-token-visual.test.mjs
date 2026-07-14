@@ -105,6 +105,18 @@ class FakeGraphics extends FakeContainer {
   endFill() { this.commands.push(["endFill"]); return this; }
 }
 
+class FakeSprite extends FakeContainer {
+  constructor() {
+    super();
+    this.anchor = new FakePoint(0.5, 0.5);
+    this.texture = null;
+    this.width = 0;
+    this.height = 0;
+    this.rotation = 0;
+    this.tint = 0xffffff;
+  }
+}
+
 class FakeRectangle {
   constructor(x, y, width, height) {
     this.x = x;
@@ -122,6 +134,7 @@ class FakeRectangle {
 globalThis.PIXI = {
   Container: FakeContainer,
   Graphics: FakeGraphics,
+  Sprite: FakeSprite,
   Rectangle: FakeRectangle,
   BLEND_MODES: { NORMAL: "normal", SCREEN: "screen", MULTIPLY: "multiply" },
   UPDATE_PRIORITY: { NORMAL: 0, PRIMARY: 3 }
@@ -160,7 +173,8 @@ function makeToken(elevation) {
       return new FakePoint(token.document.x + local.x, token.document.y + local.y);
     }
   });
-  token.mesh = new FakeContainer();
+  token.mesh = new FakeSprite();
+  token.mesh.texture = { id: `${token.id}-texture`, destroyed: false };
   token.mesh.position.set(token.center.x, token.center.y);
   token.shape = { type: "test-token-shape" };
   token.tooltip = new FakeContainer();
@@ -192,8 +206,9 @@ test("moves native elevation UI with the artwork without changing visibility or 
   assertClose(token.tooltip.y, -7 + offsetY);
   assertClose(token.levelIndicator.x, 61 + offsetX);
   assertClose(token.levelIndicator.y, -29 + offsetY);
-  assert.equal(visual.container.children.length, 4);
-  assert.ok(visual.container.children.every(child => child instanceof FakeGraphics));
+  assert.equal(visual.container.children.length, 6);
+  assert.ok(visual.container.children.slice(0, 4).every(child => child instanceof FakeGraphics));
+  assert.ok(visual.container.children.slice(4).every(child => child instanceof FakeSprite));
 
   visual.updateSettings({ ...settings });
   assert.equal(token.tooltip.renderable, true);
@@ -248,7 +263,8 @@ test("keeps the ground base snapped while only the rendered mesh moves", () => {
     y: token.mesh.y - token.center.y
   };
   const standCommandCount = visual.standGraphics.commands.length;
-  const commandReferences = visual.container.children.map(graphics => graphics.commands);
+  const commandReferences = visual.container.children.slice(0, 4)
+    .map(graphics => graphics.commands);
 
   assert.deepEqual(
     [visual.container.x + visual.metrics.base.x, visual.container.y + visual.metrics.base.y],
@@ -275,7 +291,7 @@ test("keeps the ground base snapped while only the rendered mesh moves", () => {
   assert.ok(Math.abs(token.mesh.x - (token.center.x + offset.x)) < 1e-9);
   assert.ok(Math.abs(token.mesh.y - (token.center.y + offset.y)) < 1e-9);
   assert.equal(visual.standGraphics.commands.length, standCommandCount);
-  visual.container.children.forEach((graphics, index) => {
+  visual.container.children.slice(0, 4).forEach((graphics, index) => {
     assert.strictEqual(graphics.commands, commandReferences[index]);
   });
 
@@ -382,7 +398,7 @@ test("anchors non-rectangular Token shapes to Foundry's actual local center", ()
   assert.deepEqual([token.mesh.x, token.mesh.y], [token.center.x, token.center.y]);
 });
 
-test("renders a concentric acrylic rim, top-view rod end, and displaced disc shadow", () => {
+test("renders a projected rod plus the Token texture's real upper-right silhouette", () => {
   const token = makeToken(60);
   const visual = new FlyingTokenVisual(token, settings);
   const standEllipses = visual.standGraphics.commands.filter(command => command[0] === "drawEllipse");
@@ -392,20 +408,46 @@ test("renders a concentric acrylic rim, top-view rod end, and displaced disc sha
 
   assert.equal(visual.standGraphics.commands.filter(command => command[0] === "drawPolygon").length, 0);
   assert.ok(standEllipses.length >= 3);
-  assert.ok(specularLines.length >= 5);
+  assert.ok(specularLines.length >= 3);
   assert.ok(Math.max(...specularLines.map(command => command[1])) <= 3.5);
   assert.equal(visual.standSpecularGraphics.blendMode, "screen");
-  assert.equal(shadowFills.length, 6);
+  assert.equal(shadowFills.length, 4);
   assert.equal(
     visual.shadowGraphics.commands.filter(command => command[0] === "drawPolygon").length,
-    4
+    2
   );
   assert.ok(Math.max(...shadowFills.map(command => command[2])) > 0.1);
+  assert.equal(visual.shadowCoreSprite.texture, token.mesh.texture);
+  assert.equal(visual.shadowCoreSprite.visible, true);
+  assert.equal(visual.shadowPenumbraSprite.visible, true);
+  assertClose(visual.shadowCoreSprite.x, visual.metrics.shadow.x);
+  assertClose(visual.shadowCoreSprite.y, visual.metrics.shadow.y);
+  assertClose(visual.shadowCoreSprite.width, visual.metrics.shadow.width);
+  assertClose(visual.shadowCoreSprite.height, visual.metrics.shadow.height);
+  assert.ok(visual.shadowPenumbraSprite.width > visual.shadowCoreSprite.width);
+  assert.ok(visual.shadowCoreSprite.alpha > visual.shadowPenumbraSprite.alpha);
   assert.equal(
     [...visual.standGraphics.commands, ...visual.standSpecularGraphics.commands]
       .some(command => command[0] === "drawCircle"),
     false
   );
+  visual.destroy();
+});
+
+test("refreshes both projected silhouettes when Foundry replaces the Token texture", () => {
+  const token = makeToken(60);
+  const visual = new FlyingTokenVisual(token, settings);
+  const originalTexture = token.mesh.texture;
+  const replacementTexture = { id: "replacement-token-texture" };
+
+  assert.equal(visual.shadowCoreSprite.texture, originalTexture);
+  assert.equal(visual.shadowPenumbraSprite.texture, originalTexture);
+
+  token.mesh.texture = replacementTexture;
+  visual.onRefresh({ refreshMesh: true });
+
+  assert.equal(visual.shadowCoreSprite.texture, replacementTexture);
+  assert.equal(visual.shadowPenumbraSprite.texture, replacementTexture);
   visual.destroy();
 });
 
