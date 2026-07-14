@@ -1,5 +1,5 @@
 <section
-  class="airspace-panel {{#if isExpanded}}is-expanded{{/if}}"
+  class="airspace-panel is-expanded"
   role="region"
   aria-label="{{localize 'PF2E_FLYING_VISUAL_HELPER.Hud.title'}}"
 >
@@ -33,21 +33,10 @@
       {{/each}}
     </nav>
 
-    <button
-      id="pf2e-fvh-airspace-summary"
-      type="button"
-      class="airspace-summary"
-      data-action="toggleDetails"
-      data-tooltip="{{summaryTooltipText}}"
-      data-tooltip-direction="DOWN"
-      aria-label="{{toggleDetailsLabel}}. {{summaryAccessibleLabel}}"
-      aria-expanded="{{isExpanded}}"
-      aria-controls="pf2e-fvh-airspace-details"
-    >
-      <i class="fa-solid fa-wind airspace-summary-mark" aria-hidden="true"></i>
-      <span>{{summaryLabel}}</span>
-      <i class="fa-solid {{#if isExpanded}}fa-chevron-up{{else}}fa-chevron-down{{/if}} airspace-chevron" aria-hidden="true"></i>
-    </button>
+    <div class="airspace-title">
+      <i class="fa-solid fa-wind airspace-title-mark" aria-hidden="true"></i>
+      <span>{{localize "PF2E_FLYING_VISUAL_HELPER.Hud.title"}}</span>
+    </div>
 
     <button
       id="pf2e-fvh-airspace-close"
@@ -62,8 +51,7 @@
     </button>
   </header>
 
-  {{#if isExpanded}}
-    <section id="pf2e-fvh-airspace-details" class="airspace-details">
+  <section id="pf2e-fvh-airspace-details" class="airspace-details">
       {{#if selected}}
         <section class="airspace-relations" aria-label="{{localize 'PF2E_FLYING_VISUAL_HELPER.Hud.relationsTitle'}}">
           <div class="airspace-relations-heading">
@@ -162,6 +150,5 @@
           <p>{{localize "PF2E_FLYING_VISUAL_HELPER.Hud.empty"}}</p>
         </div>
       {{/if}}
-    </section>
-  {{/if}}
+  </section>
 </section>

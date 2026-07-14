@@ -2,11 +2,11 @@
   "PF2E_FLYING_VISUAL_HELPER.Settings.enabled.name": "启用飞行视觉辅助",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enabled.hint": "启用纯客户端 PF2e 空域视觉与战术 HUD。",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableAltitudeHud.name": "启用高度 HUD",
-  "PF2E_FLYING_VISUAL_HELPER.Settings.enableAltitudeHud.hint": "在 Token 控制栏提供极简 ApplicationV2 空域 HUD；默认保持关闭，仅点击后显示，并在每次切换场景时关闭。",
+  "PF2E_FLYING_VISUAL_HELPER.Settings.enableAltitudeHud.hint": "在 Token 控制栏提供完整 ApplicationV2 空域 HUD；默认保持关闭，点击后直接完整展开，并在每次切换场景时关闭。",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableGroundProjection.name": "启用地面投影",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableGroundProjection.hint": "以不参与交互的地面提示标明 Foundry 的真实 Token footprint，并使用克制的投影引导线。",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableHeightAxis.name": "启用高度轴",
-  "PF2E_FLYING_VISUAL_HELPER.Settings.enableHeightAxis.hint": "主动展开 HUD 详情后使用节省空间的相对高度轴，每个 Token 仍显示精确 elevation；关闭后改为紧凑 Token 列表。",
+  "PF2E_FLYING_VISUAL_HELPER.Settings.enableHeightAxis.hint": "在完整 HUD 中使用节省空间的相对高度轴，每个 Token 仍显示精确 elevation；关闭后改为紧凑 Token 列表。",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableStand.name": "启用透明支架",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableStand.hint": "在 Foundry 计算的 Token footprint 中心与抬升模型之间绘制分层亚克力杆体、固定透明地面盘和连接头。",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableShadow.name": "启用高度阴影",
@@ -36,10 +36,5 @@
   "PF2E_FLYING_VISUAL_HELPER.Hud.empty": "没有玩家可见的 Token 符合当前过滤条件。",
   "PF2E_FLYING_VISUAL_HELPER.Hud.controlButton": "打开 PF2e 空域 HUD",
   "PF2E_FLYING_VISUAL_HELPER.Hud.dragHandle": "拖动空域 HUD",
-  "PF2E_FLYING_VISUAL_HELPER.Hud.expandDetails": "展开空域详情",
-  "PF2E_FLYING_VISUAL_HELPER.Hud.collapseDetails": "收起空域详情",
-  "PF2E_FLYING_VISUAL_HELPER.Hud.close": "关闭空域 HUD",
-  "PF2E_FLYING_VISUAL_HELPER.Hud.summary.selected": "已选 {name} · {elevation} · 共 {count} 个可见单位",
-  "PF2E_FLYING_VISUAL_HELPER.Hud.summary.count": "{count} 个可见单位 · 最高 {elevation}",
-  "PF2E_FLYING_VISUAL_HELPER.Hud.summary.empty": "没有玩家可见的 Token"
+  "PF2E_FLYING_VISUAL_HELPER.Hud.close": "关闭空域 HUD"
 }

@@ -9,7 +9,7 @@
   }
 
   /* A frameless ApplicationV2 does not inherit Foundry's .application
-     positioning. Keep this tiny HUD viewport-relative and above the Canvas. */
+     positioning. Keep the HUD viewport-relative and above the Canvas. */
   .pf2e-flying-visual-helper.airspace-hud {
     position: fixed;
     z-index: var(--z-index-window, 100);
@@ -29,8 +29,7 @@
     overflow: visible;
   }
 
-  /* The resting state is deliberately quieter than normal Foundry UI, like a
-     game navigation/minimap overlay. Hover and keyboard focus reveal it. */
+  /* The full HUD keeps a quiet navigation/minimap-style header. */
   .pf2e-flying-visual-helper .airspace-microbar {
     display: flex;
     flex: 0 0 32px;
@@ -58,8 +57,7 @@
     opacity: 0.96;
   }
 
-  .pf2e-flying-visual-helper .airspace-icon-button,
-  .pf2e-flying-visual-helper button.airspace-summary {
+  .pf2e-flying-visual-helper .airspace-icon-button {
     min-inline-size: 0;
     min-block-size: 0;
     margin: 0;
@@ -116,47 +114,35 @@
     text-shadow: 0 0 7px rgba(118, 216, 236, 0.5);
   }
 
-  .pf2e-flying-visual-helper button.airspace-summary {
+  .pf2e-flying-visual-helper .airspace-title {
     display: flex;
     flex: 1 1 auto;
     align-items: center;
     gap: 5px;
+    min-inline-size: 0;
     inline-size: auto;
     block-size: 24px;
+    padding-inline: 2px;
     overflow: hidden;
-    border-radius: 4px;
-    background: transparent;
+    color: rgba(231, 248, 251, 0.82);
     font-size: 0.68rem;
     font-variant-numeric: tabular-nums;
     text-align: start;
     white-space: nowrap;
   }
 
-  .pf2e-flying-visual-helper button.airspace-summary:hover,
-  .pf2e-flying-visual-helper button.airspace-summary:focus-visible {
-    background: rgba(213, 248, 255, 0.07);
-    color: #fff;
-  }
-
-  .pf2e-flying-visual-helper .airspace-summary > span {
+  .pf2e-flying-visual-helper .airspace-title > span {
     flex: 1 1 auto;
     min-inline-size: 0;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .pf2e-flying-visual-helper .airspace-summary-mark {
+  .pf2e-flying-visual-helper .airspace-title-mark {
     flex: 0 0 auto;
     color: var(--airspace-accent);
     font-size: 0.65rem;
     opacity: 0.8;
-  }
-
-  .pf2e-flying-visual-helper .airspace-chevron {
-    flex: 0 0 auto;
-    margin-inline-end: 2px;
-    font-size: 0.55rem;
-    opacity: 0.62;
   }
 
   .pf2e-flying-visual-helper .airspace-close {

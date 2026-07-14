@@ -2,11 +2,11 @@
   "PF2E_FLYING_VISUAL_HELPER.Settings.enabled.name": "Enable Flying Visual Helper",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enabled.hint": "Enable the client-side PF2e airspace visuals and tactical HUD.",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableAltitudeHud.name": "Enable Altitude HUD",
-  "PF2E_FLYING_VISUAL_HELPER.Settings.enableAltitudeHud.hint": "Make the ultra-compact ApplicationV2 airspace HUD available from Token controls. It remains closed until clicked and closes on every Scene change.",
+  "PF2E_FLYING_VISUAL_HELPER.Settings.enableAltitudeHud.hint": "Make the full ApplicationV2 airspace HUD available from Token controls. It remains closed until clicked, opens fully expanded, and closes on every Scene change.",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableGroundProjection.name": "Enable Ground Projection",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableGroundProjection.hint": "Mark Foundry's actual Token footprint with a non-interactive ground cue and a restrained projection guide.",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableHeightAxis.name": "Enable Height Axis",
-  "PF2E_FLYING_VISUAL_HELPER.Settings.enableHeightAxis.hint": "Use a compact relative-height axis when the HUD details are expanded; exact elevation remains visible on every Token. Disable for a compact Token list.",
+  "PF2E_FLYING_VISUAL_HELPER.Settings.enableHeightAxis.hint": "Use a compact relative-height axis in the full HUD; exact elevation remains visible on every Token. Disable for a compact Token list.",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableStand.name": "Enable Transparent Stand",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableStand.hint": "Render a layered acrylic shaft, fixed ground plate, and connectors between Foundry's Token-footprint center and the lifted art.",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableShadow.name": "Enable Height Shadow",
@@ -36,10 +36,5 @@
   "PF2E_FLYING_VISUAL_HELPER.Hud.empty": "No visible Tokens match this filter.",
   "PF2E_FLYING_VISUAL_HELPER.Hud.controlButton": "Open PF2e Airspace HUD",
   "PF2E_FLYING_VISUAL_HELPER.Hud.dragHandle": "Drag the Airspace HUD",
-  "PF2E_FLYING_VISUAL_HELPER.Hud.expandDetails": "Expand airspace details",
-  "PF2E_FLYING_VISUAL_HELPER.Hud.collapseDetails": "Collapse airspace details",
-  "PF2E_FLYING_VISUAL_HELPER.Hud.close": "Close the Airspace HUD",
-  "PF2E_FLYING_VISUAL_HELPER.Hud.summary.selected": "Selected {name} · {elevation} · {count} visible",
-  "PF2E_FLYING_VISUAL_HELPER.Hud.summary.count": "{count} visible · max {elevation}",
-  "PF2E_FLYING_VISUAL_HELPER.Hud.summary.empty": "No visible Tokens"
+  "PF2E_FLYING_VISUAL_HELPER.Hud.close": "Close the Airspace HUD"
 }

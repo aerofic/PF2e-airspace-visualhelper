@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.5 — Full HUD on Activation
+
+- Removed the compact summary-bar state, disclosure action, chevron, and all expand/collapse transitions from the Airspace HUD.
+- Made the Token-control button open the complete height axis, nearby relations, and Token list immediately.
+- Preserved click-to-open lifecycle behavior: the HUD still starts closed and closes on every Scene change.
+- Kept adaptive uncapped sizing, filters, dragging, Token focus, and the explicit close action in the single full-view state.
+- Added regression coverage proving that no collapsed-summary path remains in the ApplicationV2 actions or Handlebars template.
+
 ## 0.4.4 — Native Labels Follow Lifted Tokens
 
 - Made Foundry/PF2e native elevation tooltip and Level-indicator positions follow the exact airborne Mesh lift while retaining their original relative placement above Token artwork.

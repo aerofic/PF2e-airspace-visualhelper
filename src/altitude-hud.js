@@ -16,14 +16,7 @@ import { normalizeHudElevation } from "./visual-math.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
-/** Default to a tiny navigation-style status bar centered near the Canvas top. */
-export const ALTITUDE_HUD_DEFAULT_POSITION = Object.freeze({
-  width: 360,
-  height: 32,
-  top: 52
-});
-
-/** Minimum expanded fallback; live content replaces these dimensions. */
+/** Minimum full-HUD fallback; live content replaces these dimensions. */
 export const ALTITUDE_HUD_EXPANDED_POSITION = Object.freeze({
   width: 360,
   height: 73,
@@ -51,11 +44,10 @@ export class AltitudeHud extends HandlebarsApplicationMixin(ApplicationV2) {
       resizable: false,
       minimizable: false
     },
-    // Omitting left lets ApplicationV2 center the HUD horizontally on its
+    // Omitting left lets ApplicationV2 center the full HUD horizontally on
     // first render. Its stored position remains user-draggable thereafter.
-    position: { ...ALTITUDE_HUD_DEFAULT_POSITION },
+    position: { ...ALTITUDE_HUD_EXPANDED_POSITION },
     actions: {
-      toggleDetails: AltitudeHud.#onToggleDetails,
       closeHud: AltitudeHud.#onCloseHud,
       setFilter: AltitudeHud.#onSetFilter,
       focusToken: AltitudeHud.#onFocusToken
@@ -69,7 +61,6 @@ export class AltitudeHud extends HandlebarsApplicationMixin(ApplicationV2) {
   };
 
   #filter = HUD_FILTERS.ALL;
-  #expanded = false;
   #selectedTokenId = null;
   #refreshTimer = null;
   #listenerAbortController = null;
@@ -81,28 +72,24 @@ export class AltitudeHud extends HandlebarsApplicationMixin(ApplicationV2) {
     const allEntries = collectVisibleTokenEntries({ unit });
     const filteredEntries = sortAltitudeEntries(filterAltitudeEntries(allEntries, this.#filter));
     const selected = resolveSelectedEntry(allEntries, this.#selectedTokenId);
-    const relations = this.#expanded
-      ? buildAltitudeRelations(selected, allEntries, {
-        gridSize: canvas.grid?.size ?? canvas.dimensions?.size ?? 100,
-        radiusSpaces: NEARBY_RADIUS_GRID_SPACES
-      }).map(relation => ({
-        ...relation,
-        relationText: formatRelation(relation, unit),
-        relationActionLabel: `${relation.name}, ${formatRelation(relation, unit)}, ${relation.accessibleLabel}`
-      }))
-      : [];
+    const relations = buildAltitudeRelations(selected, allEntries, {
+      gridSize: canvas.grid?.size ?? canvas.dimensions?.size ?? 100,
+      radiusSpaces: NEARBY_RADIUS_GRID_SPACES
+    }).map(relation => ({
+      ...relation,
+      relationText: formatRelation(relation, unit),
+      relationActionLabel: `${relation.name}, ${formatRelation(relation, unit)}, ${relation.accessibleLabel}`
+    }));
 
-    // The relative axis is created only while expanded. Every exact Token
-    // elevation stays in its node; the axis pixels express ordering, not feet.
-    const showHeightAxis = this.#expanded && settings.enableHeightAxis;
+    // Every exact Token elevation stays in its node; the axis pixels express
+    // ordering, not feet. The HUD has no collapsed summary mode.
+    const showHeightAxis = settings.enableHeightAxis;
     const axis = showHeightAxis ? buildAltitudeAxis(filteredEntries) : null;
-    const hudPosition = this.#expanded
-      ? calculateExpandedHudPosition({
-        axis,
-        entryCount: filteredEntries.length,
-        hasSelected: !!selected
-      })
-      : ALTITUDE_HUD_DEFAULT_POSITION;
+    const hudPosition = calculateExpandedHudPosition({
+      axis,
+      entryCount: filteredEntries.length,
+      hasSelected: !!selected
+    });
 
     const filterIcons = {
       [HUD_FILTERS.ALL]: "fa-layer-group",
@@ -115,13 +102,9 @@ export class AltitudeHud extends HandlebarsApplicationMixin(ApplicationV2) {
       label: game.i18n.localize(`PF2E_FLYING_VISUAL_HELPER.Hud.filter.${filter}`),
       icon: filterIcons[filter]
     }));
-    const summarySelected = filteredEntries.find(entry => entry.id === selected?.id) ?? null;
-    const summary = buildHudSummary({ selected: summarySelected, entries: filteredEntries, unit });
-
     return {
       ...context,
       filters,
-      isExpanded: this.#expanded,
       showHeightAxis,
       hasTokens: filteredEntries.length > 0,
       entries: filteredEntries,
@@ -135,12 +118,6 @@ export class AltitudeHud extends HandlebarsApplicationMixin(ApplicationV2) {
         }))
       } : null,
       hudPosition,
-      summaryLabel: summary.label,
-      summaryAccessibleLabel: summary.accessibleLabel,
-      summaryTooltipText: summary.tooltipText,
-      toggleDetailsLabel: game.i18n.localize(this.#expanded
-        ? "PF2E_FLYING_VISUAL_HELPER.Hud.collapseDetails"
-        : "PF2E_FLYING_VISUAL_HELPER.Hud.expandDetails"),
       selected: selected ? {
         ...selected,
         elevationLabel: `${formatFeet(selected.elevation)} ${unit}`
@@ -155,21 +132,12 @@ export class AltitudeHud extends HandlebarsApplicationMixin(ApplicationV2) {
 
   _onRender(context, options) {
     super._onRender(context, options);
-    this.#setModePosition(context.hudPosition ?? ALTITUDE_HUD_DEFAULT_POSITION);
+    this.#setModePosition(context.hudPosition ?? ALTITUDE_HUD_EXPANDED_POSITION);
     this.#listenerAbortController?.abort();
     this.#listenerAbortController = new AbortController();
     const { signal } = this.#listenerAbortController;
     const dragHandle = this.parts.main?.querySelector(".airspace-drag-handle");
     if (dragHandle) activateHudDragging(dragHandle, this, { signal });
-  }
-
-  _preClose(options) {
-    // Re-opening must always return to the unobtrusive navigation bar. Resize
-    // while the element still exists because ApplicationV2 removes it before
-    // _onClose runs.
-    this.#expanded = false;
-    this.#setModePosition(ALTITUDE_HUD_DEFAULT_POSITION);
-    return super._preClose(options);
   }
 
   _onClose(options) {
@@ -182,7 +150,6 @@ export class AltitudeHud extends HandlebarsApplicationMixin(ApplicationV2) {
 
   async toggle() {
     if (this.rendered) return this.close();
-    this.#expanded = false;
     return this.render({ force: true });
   }
 
@@ -226,8 +193,7 @@ export class AltitudeHud extends HandlebarsApplicationMixin(ApplicationV2) {
     this.setPosition(nextPosition);
   }
 
-  #measureCurrentModePosition() {
-    if (!this.#expanded) return ALTITUDE_HUD_DEFAULT_POSITION;
+  #measureExpandedPosition() {
     const settings = readSettings();
     const unit = getSceneDistanceUnit();
     const allEntries = collectVisibleTokenEntries({ unit });
@@ -241,16 +207,6 @@ export class AltitudeHud extends HandlebarsApplicationMixin(ApplicationV2) {
     });
   }
 
-  static async #onToggleDetails(event) {
-    event.preventDefault();
-    this.#expanded = !this.#expanded;
-    this.#setModePosition(this.#measureCurrentModePosition());
-    await this.render({ parts: ["main"] });
-    this.parts?.main
-      ?.querySelector("#pf2e-fvh-airspace-summary")
-      ?.focus({ preventScroll: true });
-  }
-
   static #onCloseHud(event) {
     event.preventDefault();
     return this.close();
@@ -261,7 +217,7 @@ export class AltitudeHud extends HandlebarsApplicationMixin(ApplicationV2) {
     const filter = target.dataset.filter;
     if (!Object.values(HUD_FILTERS).includes(filter) || (filter === this.#filter)) return;
     this.#filter = filter;
-    if (this.#expanded) this.#setModePosition(this.#measureCurrentModePosition());
+    this.#setModePosition(this.#measureExpandedPosition());
     await this.render({ parts: ["main"] });
     this.parts?.main
       ?.querySelector(`[data-action="setFilter"][data-filter="${filter}"]`)
@@ -300,9 +256,8 @@ export class AltitudeHud extends HandlebarsApplicationMixin(ApplicationV2) {
 }
 
 /**
- * Size the expanded HUD from its complete content without a viewport cap.
- * The compact bar remains a stable 360×32; only the requested detail surface
- * grows with relative altitude levels or list rows.
+ * Size the full HUD from its complete content without a viewport cap.
+ * The detail surface grows with relative altitude levels or list rows.
  */
 export function calculateExpandedHudPosition({
   axis = null,
@@ -439,29 +394,6 @@ function formatRelation(relation, unit) {
     delta: formatFeet(relation.delta),
     unit
   });
-}
-
-function buildHudSummary({ selected, entries, unit }) {
-  const count = entries.length;
-  if (count === 0) {
-    const label = game.i18n.localize("PF2E_FLYING_VISUAL_HELPER.Hud.summary.empty");
-    return { label, accessibleLabel: label, tooltipText: label };
-  }
-
-  const maximum = `${formatFeet(entries[0].elevation)} ${unit}`;
-  const key = selected
-    ? "PF2E_FLYING_VISUAL_HELPER.Hud.summary.selected"
-    : "PF2E_FLYING_VISUAL_HELPER.Hud.summary.count";
-  const label = game.i18n.format(key, {
-    name: selected?.name ?? "",
-    elevation: selected ? `${formatFeet(selected.elevation)} ${unit}` : maximum,
-    count
-  });
-  return {
-    label,
-    accessibleLabel: `${game.i18n.localize("PF2E_FLYING_VISUAL_HELPER.Hud.title")}. ${label}`,
-    tooltipText: entries.map(entry => entry.accessibleLabel).join(" • ")
-  };
 }
 
 function getSceneDistanceUnit() {
