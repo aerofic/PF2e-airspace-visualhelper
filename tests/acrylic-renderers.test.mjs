@@ -90,8 +90,8 @@ test("layers a restrained acrylic body, plate, pin, connector, and SCREEN highli
   assert.equal(specular.visible, true);
   assert.equal(
     body.commands.filter(command => command[0] === "drawPolygon").length,
-    3,
-    "only shaft, bottom pin, and compact connector sleeve are drawn"
+    4,
+    "shaft body, cylindrical shade plane, bottom pin, and compact connector sleeve are drawn"
   );
   assert.ok(body.commands.filter(command => command[0] === "drawEllipse").length >= 2);
   assert.ok(specular.commands.filter(command => command[0] === "drawEllipse").length >= 3);
@@ -120,7 +120,7 @@ test("layers a restrained acrylic body, plate, pin, connector, and SCREEN highli
   assert.deepEqual(specular.commands, []);
 });
 
-test("uses two shaft, three height, and two contact shadow layers without filters", () => {
+test("uses three shaft, four Token, and two contact shadow layers without filters", () => {
   const graphics = new FakeGraphics();
   const renderer = new ShadowRenderer(graphics);
 
@@ -133,15 +133,18 @@ test("uses two shaft, three height, and two contact shadow layers without filter
   assert.equal(graphics.visible, true);
   assert.equal(
     graphics.commands.filter(command => command[0] === "beginFill").length,
-    7
+    9
   );
-  assert.equal(graphics.commands.filter(command => command[0] === "drawPolygon").length, 2);
+  assert.equal(graphics.commands.filter(command => command[0] === "drawPolygon").length, 7);
   const fills = graphics.commands.filter(command => command[0] === "beginFill");
-  assert.ok(fills.every(command => command[2] > 0 && command[2] <= 0.36));
-  const shaftOpacity = fills.slice(0, 2)
+  assert.ok(
+    fills.every(command => command[2] > 0 && command[2] <= 0.42),
+    "each physical layer remains translucent even though their overlap is dense"
+  );
+  const shaftOpacity = fills.slice(0, 3)
     .reduce((combined, command) => 1 - ((1 - combined) * (1 - command[2])), 0);
   assert.ok(shaftOpacity > 0.45, "shaft shadow should read as a strong physical cast shadow");
-  const castOpacity = fills.slice(2, 5)
+  const castOpacity = fills.slice(3, 7)
     .reduce((combined, command) => 1 - ((1 - combined) * (1 - command[2])), 0);
   assert.ok(castOpacity > 0.35, "layered cast shadow should remain clearly readable");
 

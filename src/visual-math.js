@@ -196,24 +196,26 @@ export function calculateVisualMetrics({
 
   const distanceMultiplier = clamp(finiteOr(shadowDistanceMultiplier, 1), 0.25, 3);
   const desiredShadowDistance = safeGridSize * clamp(
-    (0.09 + (0.42 * signal)) * distanceMultiplier,
-    0.04,
-    0.75
+    (0.18 + (0.5 * signal)) * distanceMultiplier,
+    0.08,
+    0.9
   );
   // The cast shadow is the primary height cue. Keep it broad and readable at
   // altitude instead of shrinking and fading it into the map texture.
-  const shadowScale = 0.98 - (0.18 * signal);
-  const shadowFalloff = 1 - (0.28 * signal);
+  const shadowScale = 0.98 - (0.12 * signal);
+  const shadowFalloff = 1 - (0.18 * signal);
   const desiredShadowRadiusX = compressedRadius * 0.72 * shadowScale;
   const shadowRadiusX = Math.min(desiredShadowRadiusX, safeGridSize * 0.62);
   const shadowRadiusY = Math.min(
-    desiredShadowRadiusX * (0.34 - (0.04 * signal)),
+    desiredShadowRadiusX * (0.36 - (0.03 * signal)),
     safeGridSize * 0.24
   );
   // A height-cast shadow may leave the original Token footprint. Confining it
   // to one grid square erased most of the visible offset at useful heights.
+  // Foundry Canvas uses positive Y downward. A positive X and negative Y
+  // therefore makes every cast shadow travel toward the screen's upper-right.
   const shadowX = pose.ground.x + (desiredShadowDistance * 0.88);
-  const shadowY = pose.ground.y + (desiredShadowDistance * 0.47);
+  const shadowY = pose.ground.y - (desiredShadowDistance * 0.47);
   const shaftShadowWidth = clamp(lineWidth * (0.72 + (signal * 0.16)), 2.5, 6);
   const shaftShadowAlpha = normalizedShadowOpacity * takeoff * (0.72 + (signal * 0.12));
 

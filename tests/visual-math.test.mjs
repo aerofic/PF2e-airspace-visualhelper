@@ -118,8 +118,10 @@ test("lift, stand length, and bounded shadow drift grow with elevation", () => {
   assert.ok(medium.token.offsetY > high.token.offsetY);
   assert.ok(low.stand.length < medium.stand.length);
   assert.ok(medium.stand.length < high.stand.length);
-  assert.ok(low.shadow.y < medium.shadow.y);
-  assert.ok(medium.shadow.y < high.shadow.y);
+  assert.ok(low.shadow.y > medium.shadow.y);
+  assert.ok(medium.shadow.y > high.shadow.y);
+  assert.ok(low.shadow.x > low.base.x);
+  assert.ok(low.shadow.y < low.base.y);
 });
 
 test("keeps the acrylic base at the Token footprint while raising the art vertically", () => {
@@ -280,7 +282,7 @@ test("swapping width and height preserves perspective response and bounded groun
         assert.ok(Math.hypot(
           metrics.shadow.x - metrics.base.x,
           metrics.shadow.y - metrics.base.y
-        ) <= 75 + 1e-9);
+        ) <= 90 + 1e-9);
       }
     }
   }
@@ -304,7 +306,7 @@ test("keeps the height-cast and contact shadows prominent at tactical elevation"
     metrics.shadow.y - metrics.base.y
   );
 
-  assert.ok(distance > 35, "60 ft shadow should visibly leave the ground marker");
+  assert.ok(distance > 50, "60 ft shadow should visibly leave the ground marker");
   assert.ok(metrics.shadow.alpha > 0.4, "cast shadow should survive height falloff");
   assert.ok(metrics.shadow.radiusX > 28, "cast shadow should retain readable area");
   assert.deepEqual(
@@ -358,6 +360,8 @@ test("stand shadow connects the fixed plate to the height-cast shadow", () => {
     );
     assert.ok(metrics.shadow.shaftAlpha > 0);
     assert.ok(metrics.shadow.shaftWidth > 0);
+    assert.ok(metrics.shadow.shaftEndX > metrics.shadow.shaftStartX);
+    assert.ok(metrics.shadow.shaftEndY < metrics.shadow.shaftStartY);
   }
   assert.ok(lengths[0] < lengths[1]);
   assert.ok(lengths[1] < lengths[2]);
@@ -428,7 +432,7 @@ test("keeps the base and contact shadow inside the footprint while bounding the 
   assert.ok(Math.hypot(
     metrics.shadow.x - metrics.base.x,
     metrics.shadow.y - metrics.base.y
-  ) <= 75 + 1e-9);
+  ) <= 90 + 1e-9);
   assert.ok(metrics.shadow.radiusX <= 62);
   assert.ok(metrics.shadow.radiusY <= 24);
   assert.ok(metrics.shadow.contactX - (metrics.shadow.contactRadiusX * 1.12) >= 0);
@@ -532,7 +536,7 @@ test("shadow multiplier changes shadow drift without changing the stand", () => 
   const near = calculateVisualMetrics({ ...base, elevation: 60, shadowDistanceMultiplier: 0.5 });
   const far = calculateVisualMetrics({ ...base, elevation: 60, shadowDistanceMultiplier: 2 });
   assert.equal(near.stand.length, far.stand.length);
-  assert.ok(near.shadow.y < far.shadow.y);
+  assert.ok(near.shadow.y > far.shadow.y);
 });
 
 test("animation easing and duration are bounded", () => {

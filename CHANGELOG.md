@@ -1,11 +1,12 @@
 # Changelog
 
-## 0.4.15 — Physical Stand and Token Shadows
+## 0.4.16 — Cylindrical Upper-Right Shadows
 
 - Added a dedicated ground-plane shadow for the vertical acrylic shaft, running from the fixed plate into the airborne Token's height-cast shadow.
-- Rendered the shaft shadow as a strong two-layer tapered MULTIPLY shape with a broad penumbra and dense core, without using BlurFilter.
-- Unified the shaft and Token shadows under the same down-right light vector and Shadow Opacity setting so they read as one physical stand-and-model assembly.
-- Kept the existing strong three-layer Token cast shadow and dense two-layer plate contact shadow, for seven total cached shadow layers per flying Token.
+- Added a longitudinal dark plane to the acrylic shaft so its highlight, transparent midtone, and shaded side read as a cylindrical solid.
+- Rendered the shaft shadow as a strong three-layer tapered MULTIPLY shape with a broad penumbra, middle tone, and dense umbra, without using BlurFilter.
+- Unified the shaft and Token shadows under the same upper-right cast vector and Shadow Opacity setting so they read as one physical stand-and-model assembly.
+- Rebuilt the Token cast as four rotated directional layers and retained the dense two-layer plate contact shadow, for nine cached shadow layers per flying Token.
 - Made shaft-shadow length follow elevation and Shadow Distance Multiplier while keeping its start locked to the true Token footprint.
 - Preserved the strictly vertical 0.4.14 stand, denser acrylic plate, compact sleeve connector, non-interactive Canvas behavior, and all rule boundaries.
 - Added regression coverage for strong effective shaft opacity, tapered geometry, exact plate-to-cast-shadow continuity, elevation response, and full visual integration.

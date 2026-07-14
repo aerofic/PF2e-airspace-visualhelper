@@ -41,18 +41,18 @@ export class ShadowRenderer {
     // tapered core creates depth without a per-Token BlurFilter.
     drawShaftShadow(graphics, shadow);
 
-    // Three nested ellipses approximate a soft penumbra without allocating a
-    // BlurFilter per Token. Deliberately strong MULTIPLY weights keep the cast
-    // shadow readable on bright, textured battlemaps and at high elevation.
-    graphics.beginFill(SHADOW_COLOR, alpha * 0.28)
-      .drawEllipse(x, y, radiusX * 1.24, radiusY * 1.34)
-      .endFill();
-    graphics.beginFill(SHADOW_COLOR, alpha * 0.46)
-      .drawEllipse(x, y, radiusX * 1.07, radiusY * 1.12)
-      .endFill();
-    graphics.beginFill(SHADOW_COLOR, alpha * 0.68)
-      .drawEllipse(x, y, radiusX * 0.84, radiusY * 0.84)
-      .endFill();
+    // A rotated four-layer ellipse follows the same light vector as the
+    // cylindrical shaft shadow. The dense umbra is shifted toward the base,
+    // leaving a softer trailing edge like a solid elevated object.
+    drawTokenCastShadow(graphics, shadow, { majorScale: 1.28, minorScale: 1.38, weight: 0.22 });
+    drawTokenCastShadow(graphics, shadow, { majorScale: 1.06, minorScale: 1.13, weight: 0.48 });
+    drawTokenCastShadow(graphics, shadow, { majorScale: 0.82, minorScale: 0.82, weight: 0.78 });
+    drawTokenCastShadow(graphics, shadow, {
+      majorScale: 0.62,
+      minorScale: 0.62,
+      weight: 0.92,
+      offsetAlong: -radiusX * 0.12
+    });
 
     // The outer contact shadow marks the exact ground footprint. A tighter
     // core supplies physical weight at the acrylic plate without using a
@@ -93,9 +93,9 @@ function drawShaftShadow(graphics, shadow) {
     endY,
     normalX,
     normalY,
-    startHalfWidth: width * 0.65,
-    endHalfWidth: width * 1.1,
-    alpha: alpha * 0.38
+    startHalfWidth: width * 0.8,
+    endHalfWidth: width * 1.45,
+    alpha: alpha * 0.28
   });
   drawTaperedPolygon(graphics, {
     startX,
@@ -104,10 +104,59 @@ function drawShaftShadow(graphics, shadow) {
     endY,
     normalX,
     normalY,
-    startHalfWidth: width * 0.28,
-    endHalfWidth: width * 0.5,
-    alpha: alpha * 0.72
+    startHalfWidth: width * 0.48,
+    endHalfWidth: width * 0.82,
+    alpha: alpha * 0.52
   });
+  drawTaperedPolygon(graphics, {
+    startX,
+    startY,
+    endX,
+    endY,
+    normalX,
+    normalY,
+    startHalfWidth: width * 0.2,
+    endHalfWidth: width * 0.4,
+    alpha: alpha * 0.82
+  });
+}
+
+function drawTokenCastShadow(graphics, shadow, {
+  majorScale,
+  minorScale,
+  weight,
+  offsetAlong = 0
+}) {
+  const baseX = finiteOr(shadow?.shaftStartX, shadow?.contactX);
+  const baseY = finiteOr(shadow?.shaftStartY, shadow?.contactY);
+  const x = finiteOr(shadow?.x, baseX);
+  const y = finiteOr(shadow?.y, baseY);
+  const dx = x - baseX;
+  const dy = y - baseY;
+  const length = Math.hypot(dx, dy);
+  const axisX = length > 0 ? dx / length : 1;
+  const axisY = length > 0 ? dy / length : 0;
+  const normalX = -axisY;
+  const normalY = axisX;
+  const radiusMajor = Math.max(0, finiteOr(shadow?.radiusX, 0) * majorScale);
+  const radiusMinor = Math.max(0, finiteOr(shadow?.radiusY, 0) * minorScale);
+  const alpha = Math.min(1, Math.max(0, finiteOr(shadow?.alpha, 0) * weight));
+  if (!(radiusMajor > 0) || !(radiusMinor > 0) || !(alpha > 0)) return;
+
+  const centerX = x + (axisX * offsetAlong);
+  const centerY = y + (axisY * offsetAlong);
+  const points = [];
+  const segments = 24;
+  for (let index = 0; index < segments; index += 1) {
+    const angle = (index / segments) * Math.PI * 2;
+    const along = Math.cos(angle) * radiusMajor;
+    const across = Math.sin(angle) * radiusMinor;
+    points.push(
+      centerX + (axisX * along) + (normalX * across),
+      centerY + (axisY * along) + (normalY * across)
+    );
+  }
+  drawFilledPolygon(graphics, points, alpha);
 }
 
 function drawTaperedPolygon(graphics, data) {
@@ -128,6 +177,10 @@ function drawTaperedPolygon(graphics, data) {
     endX + (normalX * endHalfWidth), endY + (normalY * endHalfWidth),
     endX - (normalX * endHalfWidth), endY - (normalY * endHalfWidth)
   ];
+  drawFilledPolygon(graphics, points, alpha);
+}
+
+function drawFilledPolygon(graphics, points, alpha) {
   graphics.beginFill(SHADOW_COLOR, alpha);
   if (typeof graphics.drawPolygon === "function") graphics.drawPolygon(points);
   else {

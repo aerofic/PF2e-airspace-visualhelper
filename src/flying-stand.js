@@ -121,6 +121,16 @@ function drawShaftBody(graphics, data) {
     baseX + (normalX * baseHalf), baseY + (normalY * baseHalf),
     baseX - (normalX * baseHalf), baseY - (normalY * baseHalf)
   ], ACRYLIC_BODY_COLOR, Math.min(0.16, opacity * 0.22));
+
+  // A cylindrical dark-side strip complements the bright refractive edge.
+  // The darker right-hand plane complements the narrow highlight and makes
+  // the transparent support read as a cylindrical acrylic rod.
+  drawFilledPolygon(graphics, [
+    topX - (normalX * topHalf * 0.08), topY - (normalY * topHalf * 0.08),
+    topX - (normalX * topHalf), topY - (normalY * topHalf),
+    baseX - (normalX * baseHalf), baseY - (normalY * baseHalf),
+    baseX - (normalX * baseHalf * 0.08), baseY - (normalY * baseHalf * 0.08)
+  ], ACRYLIC_UNDERSIDE_COLOR, Math.min(0.22, opacity * 0.34));
 }
 
 function drawRefractiveEdges(graphics, data) {
