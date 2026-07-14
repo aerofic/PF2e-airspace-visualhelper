@@ -1,0 +1,45 @@
+{
+  "id": "pf2e-flying-visual-helper",
+  "title": "PF2e Flying Visual Helper",
+  "description": "A PF2e airspace HUD and tabletop-style flight-stand visual system for Foundry VTT v14.",
+  "version": "0.2.0",
+  "compatibility": {
+    "minimum": "14.360",
+    "verified": "14.363"
+  },
+  "authors": [
+    {
+      "name": "Codex"
+    }
+  ],
+  "esmodules": [
+    "src/main.js"
+  ],
+  "styles": [
+    "styles/module.css"
+  ],
+  "languages": [
+    {
+      "lang": "en",
+      "name": "English",
+      "path": "lang/en.json"
+    },
+    {
+      "lang": "cn",
+      "name": "简体中文",
+      "path": "lang/cn.json"
+    }
+  ],
+  "relationships": {
+    "systems": [
+      {
+        "id": "pf2e",
+        "type": "system",
+        "compatibility": {
+          "minimum": "8.0.0",
+          "verified": "8.1.2"
+        }
+      }
+    ]
+  }
+}
