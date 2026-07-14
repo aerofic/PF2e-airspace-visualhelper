@@ -168,7 +168,7 @@ test("projects the rod and reuses the Token texture for a real silhouette", () =
 
   assert.equal(graphics.eventMode, "none");
   assert.equal(graphics.blendMode, "multiply");
-  assert.equal(graphics.zIndex, 0);
+  assert.equal(graphics.zIndex, 2);
   assert.equal(graphics.filters, undefined);
 
   renderer.render(metrics, true, { texture, rotation: 0.25, anchorX: 0.5, anchorY: 0.5 });

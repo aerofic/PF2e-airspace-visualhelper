@@ -420,6 +420,10 @@ test("renders a projected rod plus the Token texture's real upper-right silhouet
   assert.equal(visual.shadowCoreSprite.texture, token.mesh.texture);
   assert.equal(visual.shadowCoreSprite.visible, true);
   assert.equal(visual.shadowPenumbraSprite.visible, true);
+  assert.ok(
+    visual.shadowGraphics.zIndex > visual.shadowCoreSprite.zIndex,
+    "projected rod must remain readable across the Token cast"
+  );
   assertClose(visual.shadowCoreSprite.x, visual.metrics.shadow.x);
   assertClose(visual.shadowCoreSprite.y, visual.metrics.shadow.y);
   assertClose(visual.shadowCoreSprite.width, visual.metrics.shadow.width);

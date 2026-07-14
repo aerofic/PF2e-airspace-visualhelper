@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.2 — Readable Low-Altitude Physical Projection
+
+- Increased the default upper-right rod projection from one tenth to approximately one third of rules elevation, preserving an exact zero origin and linear elevation response.
+- Raised the projected rod above the Token cast but kept the complete visual container below real Token artwork, so the short 10 ft rod remains readable without drawing across the character image.
+- Strengthened the rod width and its two-layer umbra/penumbra contrast, especially at 10–40 ft.
+- Added a bounded finite-light perspective model: Token texture projections grow approximately 1.017× at 10 ft, 1.071× at 40 ft, and 1.20× at 100 ft on a standard 5 ft grid.
+- Increased penumbra spread continuously with elevation and reduced density according to projected area while retaining visibility on textured maps.
+- Preserved the dense acrylic base, native elevation label ownership, HUD behavior, Z Scatter compatibility, movement, targeting, PF2e rules, and TokenDocument coordinates.
+- Added regression coverage for the one-third projection ratio, 10 ft rod clearance, renderer ordering, perspective scale, falloff, and extreme finite inputs.
+
 ## 0.5.1 — Linear Texture-Accurate Height Shadows
 
 - Replaced the 0.5.0 concentric circular shadow approximation with two non-interactive PIXI Sprites that share the current Token texture and preserve its real alpha silhouette.

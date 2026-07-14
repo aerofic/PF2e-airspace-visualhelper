@@ -20,7 +20,15 @@ export function normalizeHudElevation(value) {
 // additions and distance calculations.
 const MAX_CANVAS_DIMENSION = 1_000_000;
 const MAX_HEIGHT_STEPS = 1_000_000;
-const SHADOW_PROJECTION_PER_STEP = 0.1;
+// A 5 ft rise casts roughly 1.67 ft across the map: one third of the real
+// elevation. This preserves a readable 10 ft rod without exaggerating it into
+// the former side-view stand.
+const SHADOW_PROJECTION_PER_STEP = 1 / 3;
+// Model a high, finite key light for silhouette magnification. Keeping the
+// source 120 elevation steps above the plane produces subtle low-altitude
+// growth and a readable 20% expansion at 100 ft on a 5 ft grid.
+const VIRTUAL_LIGHT_HEIGHT_STEPS = 120;
+const MAX_LIGHT_HEIGHT_RATIO = 0.35;
 const SHADOW_DIRECTION_X = Math.sqrt(3) / 2;
 const SHADOW_DIRECTION_Y = -0.5;
 
@@ -183,22 +191,33 @@ export function calculateVisualMetrics({
 
   const distanceMultiplier = clamp(finiteOr(shadowDistanceMultiplier, 1), 0.25, 3);
   // Shadow projection begins at exactly zero and remains linear through the
-  // tactical range: every elevation grid-step adds 10% of one Canvas grid at
-  // the default multiplier. Only an extreme-geometry safety cap is applied.
+  // tactical range: the screen-space cast is one third of the rules-space
+  // elevation at the default multiplier. Only an extreme safety cap applies.
   const desiredShadowDistance = Math.min(
     MAX_CANVAS_DIMENSION,
     safeGridSize * pose.heightCurve.steps * SHADOW_PROJECTION_PER_STEP * distanceMultiplier
   );
   const shadowX = pose.ground.x + (desiredShadowDistance * SHADOW_DIRECTION_X);
   const shadowY = pose.ground.y + (desiredShadowDistance * SHADOW_DIRECTION_Y);
-  const shadowSoftness = clamp(pose.heightCurve.steps * 0.006, 0.015, 0.18);
-  const shadowFalloff = 0.9 - (0.12 * signal);
-  const shadowRadiusX = Math.min(width * 0.5, safeGridSize * 4);
-  const shadowRadiusY = Math.min(height * 0.5, safeGridSize * 4);
+  const lightHeightRatio = clamp(
+    pose.heightCurve.steps / VIRTUAL_LIGHT_HEIGHT_STEPS,
+    0,
+    MAX_LIGHT_HEIGHT_RATIO
+  );
+  const shadowProjectionScale = 1 / (1 - lightHeightRatio);
+  const shadowSoftness = clamp(0.025 + (pose.heightCurve.steps * 0.0075), 0.025, 0.24);
+  // A finite elevated light magnifies the silhouette while spreading the same
+  // light loss over a larger area. The square-root falloff stays legible on a
+  // textured map without making a high shadow as dense as a low one.
+  const shadowFalloff = (0.96 - (0.1 * signal)) / Math.sqrt(shadowProjectionScale);
+  const shadowWidth = Math.min(width * shadowProjectionScale, safeGridSize * 8);
+  const shadowHeight = Math.min(height * shadowProjectionScale, safeGridSize * 8);
+  const shadowRadiusX = shadowWidth * 0.5;
+  const shadowRadiusY = shadowHeight * 0.5;
   // The acrylic rod has a fixed physical diameter. Elevation changes the
   // length of its cast, never the apparent width of the object casting it.
-  const shaftShadowWidth = clamp(safeGridSize * 0.03, 2.25, 5.5);
-  const shaftShadowAlpha = normalizedShadowOpacity * takeoff * (0.74 - (0.08 * signal));
+  const shaftShadowWidth = clamp(safeGridSize * 0.045, 3.5, 7);
+  const shaftShadowAlpha = normalizedShadowOpacity * takeoff * (0.9 - (0.08 * signal));
   // Only the small rod foot contacts the ground; a Token-sized concentric
   // contact disc was the source of the misleading halo in 0.5.0.
   const contactRadiusX = clamp(safeGridSize * 0.07, 5, 10);
@@ -262,12 +281,13 @@ export function calculateVisualMetrics({
       y: shadowY,
       radiusX: shadowRadiusX,
       radiusY: shadowRadiusY,
-      width: Math.min(width, safeGridSize * 8),
-      height: Math.min(height, safeGridSize * 8),
+      width: shadowWidth,
+      height: shadowHeight,
       alpha: normalizedShadowOpacity * shadowFalloff * takeoff,
       distance: desiredShadowDistance,
       directionX: SHADOW_DIRECTION_X,
       directionY: SHADOW_DIRECTION_Y,
+      projectionScale: shadowProjectionScale,
       softness: shadowSoftness,
       shaftStartX: pose.ground.x,
       shaftStartY: pose.ground.y,
@@ -407,6 +427,7 @@ function emptyMetrics({ pose, width, height }) {
       distance: 0,
       directionX: SHADOW_DIRECTION_X,
       directionY: SHADOW_DIRECTION_Y,
+      projectionScale: 1,
       softness: 0,
       shaftStartX: ground.x,
       shaftStartY: ground.y,

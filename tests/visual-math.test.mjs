@@ -279,8 +279,8 @@ test("swapping width and height preserves perspective and exposes only a bounded
         const overshootY = metrics.base.radiusY - (footprintHeight / 2);
         assert.ok(overshootX >= 3 && overshootX <= 7);
         assert.ok(overshootY >= 3 && overshootY <= 7);
-        assert.ok(metrics.shadow.radiusX <= Math.min(footprintWidth / 2, 400));
-        assert.ok(metrics.shadow.radiusY <= Math.min(footprintHeight / 2, 400));
+        assert.ok(metrics.shadow.radiusX <= Math.min((footprintWidth / 2) * (20 / 13), 400));
+        assert.ok(metrics.shadow.radiusY <= Math.min((footprintHeight / 2) * (20 / 13), 400));
         assert.ok(Math.hypot(
           metrics.shadow.x - metrics.base.x,
           metrics.shadow.y - metrics.base.y
@@ -290,18 +290,20 @@ test("swapping width and height preserves perspective and exposes only a bounded
   }
 });
 
-test("Token silhouette keeps its true size while height increases softness and falloff", () => {
+test("finite-light projection magnifies and softens the Token silhouette with height", () => {
   const low = calculateVisualMetrics({ ...base, elevation: 10 });
   const high = calculateVisualMetrics({ ...base, elevation: 120 });
-  assert.equal(high.shadow.radiusX, low.shadow.radiusX);
-  assert.equal(high.shadow.radiusY, low.shadow.radiusY);
-  assert.equal(high.shadow.width, low.shadow.width);
-  assert.equal(high.shadow.height, low.shadow.height);
+  assertApproximatelyEqual(low.shadow.projectionScale, 60 / 59);
+  assertApproximatelyEqual(high.shadow.projectionScale, 1.25);
+  assert.ok(high.shadow.radiusX > low.shadow.radiusX);
+  assert.ok(high.shadow.radiusY > low.shadow.radiusY);
+  assert.ok(high.shadow.width > low.shadow.width);
+  assert.ok(high.shadow.height > low.shadow.height);
   assert.ok(high.shadow.softness > low.shadow.softness);
   assert.ok(high.shadow.alpha < low.shadow.alpha);
 });
 
-test("keeps a prominent real-size cast and projects the rod to it at tactical elevation", () => {
+test("keeps a prominent perspective cast and projects the rod to it at tactical elevation", () => {
   const metrics = calculateVisualMetrics({
     ...base,
     elevation: 60,
@@ -312,10 +314,11 @@ test("keeps a prominent real-size cast and projects the rod to it at tactical el
     metrics.shadow.y - metrics.base.y
   );
 
-  assertApproximatelyEqual(distance, 120);
+  assertApproximatelyEqual(distance, 400);
   assert.ok(metrics.shadow.alpha > 0.4, "cast shadow should survive height falloff");
-  assert.equal(metrics.shadow.width, 100);
-  assert.equal(metrics.shadow.height, 100);
+  assertApproximatelyEqual(metrics.shadow.projectionScale, 10 / 9);
+  assertApproximatelyEqual(metrics.shadow.width, 1000 / 9);
+  assertApproximatelyEqual(metrics.shadow.height, 1000 / 9);
   assert.deepEqual(
     [metrics.shadow.shaftStartX, metrics.shadow.shaftStartY],
     [metrics.base.x, metrics.base.y]
@@ -338,12 +341,12 @@ test("shadow projection starts at zero and grows linearly with elevation", () =>
   assert.equal(zero.shadow.distance, 0);
 
   for (const [elevation, expectedDistance] of [
-    [5, 10],
-    [10, 20],
-    [20, 40],
-    [60, 120],
-    [100, 200],
-    [1_200, 2_400]
+    [5, 100 / 3],
+    [10, 200 / 3],
+    [20, 400 / 3],
+    [60, 400],
+    [100, 2000 / 3],
+    [1_200, 8_000]
   ]) {
     const metrics = calculateVisualMetrics({ ...base, elevation });
     const deltaX = metrics.shadow.x - metrics.base.x;
@@ -353,9 +356,19 @@ test("shadow projection starts at zero and grows linearly with elevation", () =>
     assertApproximatelyEqual(distance, expectedDistance);
     assertApproximatelyEqual(deltaX / distance, Math.sqrt(3) / 2);
     assertApproximatelyEqual(deltaY / distance, -0.5);
-    assert.equal(metrics.shadow.width, 100);
-    assert.equal(metrics.shadow.height, 100);
+    assert.ok(metrics.shadow.width >= 100);
+    assert.ok(metrics.shadow.height >= 100);
   }
+});
+
+test("a 10 ft projected rod clears standard Token art and draws above its cast", () => {
+  const metrics = calculateVisualMetrics({ ...base, elevation: 10 });
+  assert.ok(
+    metrics.shadow.distance - (base.tokenWidth / 2) >= 15,
+    "10 ft must expose a readable projected rod beyond a standard Token edge"
+  );
+  assert.ok(metrics.shadow.shaftWidth >= 4);
+  assert.ok(metrics.shadow.shaftAlpha > metrics.shadow.alpha * 0.8);
 });
 
 test("rod projection runs from the footprint to the upper-right Token projection", () => {
@@ -447,8 +460,8 @@ test("bounds the exposed plate rim, compact rod contact, and displaced cast shad
     metrics.shadow.x - metrics.base.x,
     metrics.shadow.y - metrics.base.y
   ) <= 1_000_000 + 1e-9);
-  assert.ok(metrics.shadow.radiusX <= 50);
-  assert.ok(metrics.shadow.radiusY <= 50);
+  assert.ok(metrics.shadow.radiusX <= (1000 / 13));
+  assert.ok(metrics.shadow.radiusY <= (1000 / 13));
   assert.equal(metrics.shadow.contactX, metrics.base.x);
   assert.ok(metrics.shadow.contactY >= metrics.base.y);
   assert.ok(metrics.shadow.contactRadiusX < metrics.base.radiusX);

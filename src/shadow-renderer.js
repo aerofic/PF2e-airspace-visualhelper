@@ -16,7 +16,10 @@ export class ShadowRenderer {
 
     graphics.eventMode = "none";
     graphics.blendMode = multiplyBlend(graphics.blendMode);
-    graphics.zIndex = 0;
+    // The projected rod must remain visible where it crosses the Token cast,
+    // especially at 10-40 ft. It still remains below real Token artwork because
+    // the owning Primary container uses the pre-Token sort layer.
+    graphics.zIndex = 2;
     configureStaticSprite(penumbraSprite, -1);
     configureStaticSprite(coreSprite, 1);
   }
@@ -97,7 +100,7 @@ function drawProjectedRod(graphics, shadow) {
     normalY,
     startHalfWidth: width * (0.62 + softness),
     endHalfWidth: width * (0.8 + (softness * 1.5)),
-    alpha: alpha * 0.28
+    alpha: alpha * 0.38
   });
   drawRodPolygon(graphics, {
     startX,
@@ -108,7 +111,7 @@ function drawProjectedRod(graphics, shadow) {
     normalY,
     startHalfWidth: width * 0.28,
     endHalfWidth: width * (0.36 + (softness * 0.35)),
-    alpha: alpha * 0.78
+    alpha: alpha * 0.92
   });
 }
 
