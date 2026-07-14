@@ -281,7 +281,10 @@ export function calculateVisualMetrics({
       x: connectorX,
       y: connectorY,
       length: clamp(safeGridSize * 0.11, 7, 16),
-      width: lineWidth * 1.55
+      width: lineWidth * 1.55,
+      clampSpan: clamp(compressedRadius * 0.56, safeGridSize * 0.22, safeGridSize * 0.4),
+      clampDepth: clamp(lineWidth * 0.85, 3, 6),
+      jawLength: clamp(lineWidth * 1.3, 5, 9)
     },
     base: {
       x: pose.ground.x,
@@ -412,7 +415,15 @@ function emptyMetrics({ pose, width, height }) {
       normalX: -1,
       normalY: 0
     },
-    connector: { x: ground.x, y: ground.y, length: 0, width: 0 },
+    connector: {
+      x: ground.x,
+      y: ground.y,
+      length: 0,
+      width: 0,
+      clampSpan: 0,
+      clampDepth: 0,
+      jawLength: 0
+    },
     base: {
       x: ground.x,
       y: ground.y,

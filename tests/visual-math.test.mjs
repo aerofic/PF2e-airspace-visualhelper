@@ -201,6 +201,25 @@ test("raises elongated 1x4 and 2x3 Token art fully above its fixed base", () => 
   }
 });
 
+test("scales the physical top clamp without collapsing it into the shaft", () => {
+  const single = calculateVisualMetrics({ ...base, elevation: 60 });
+  const large = calculateVisualMetrics({
+    ...base,
+    elevation: 60,
+    tokenWidth: 200,
+    tokenHeight: 200
+  });
+
+  for (const metrics of [single, large]) {
+    assert.ok(metrics.connector.clampSpan >= 22);
+    assert.ok(metrics.connector.clampSpan <= 40);
+    assert.ok(metrics.connector.clampSpan > metrics.connector.width * 2.4);
+    assert.ok(metrics.connector.clampDepth >= 3 && metrics.connector.clampDepth <= 6);
+    assert.ok(metrics.connector.jawLength >= 5 && metrics.connector.jawLength <= 9);
+  }
+  assert.ok(large.connector.clampSpan > single.connector.clampSpan);
+});
+
 test("all supported footprint shapes get the same bottom-edge clearance at five feet and above", () => {
   const dimensions = [
     [100, 100], // 1x1

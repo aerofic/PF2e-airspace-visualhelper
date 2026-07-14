@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.11 — Denser Base and Physical Token Clamp
+
+- Increased the acrylic plate's top and underside material density so the fixed ground base has a clearer physical presence while the map remains visible beneath it.
+- Strengthened the plate's refractive outer edge without changing the shaft's restrained transparent treatment.
+- Rebuilt the top attachment as a load-bearing sleeve, a wide crossbar, and two short acrylic jaws which visibly cradle the Token rim.
+- Positioned the crossbar just outside the Token's lower edge and let same-height Token art naturally cover the jaw tips, creating a seated clamp instead of a kite-string silhouette.
+- Scaled clamp span, depth, and jaw length from grid and Token visual size with finite caps for normal, multi-grid, and pathological Token dimensions.
+- Kept every new part inside the existing non-interactive body/specular PIXI.Graphics pair with no document, hit-area, movement, or rule changes.
+- Added regression coverage for plate density, six-part stand geometry, clamp width, clamp scaling, and bounded connector metrics.
+
 ## 0.4.10 — Strong Height Shadows
 
 - Reworked the height-cast shadow into a much darker, higher-contrast three-layer MULTIPLY treatment that remains readable on bright and textured maps.
