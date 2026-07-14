@@ -263,9 +263,8 @@ test("swapping width and height preserves perspective response and bounded groun
       assertApproximatelyEqual(portrait.token.scale, landscape.token.scale, 1e-9);
       assertApproximatelyEqual(portrait.token.alpha, landscape.token.alpha, 1e-9);
 
-      // The ground graphics stay screen-horizontal, so their radii may be
-      // clipped differently by a rotated footprint. Each complete visual must
-      // still remain inside its own TokenDocument bounds.
+      // The fixed acrylic base remains inside the Token footprint. The cast
+      // shadow may extend outside it to preserve an obvious height offset.
       for (const [metrics, footprintWidth, footprintHeight] of [
         [portrait, width, height],
         [landscape, height, width]
@@ -274,10 +273,12 @@ test("swapping width and height preserves perspective response and bounded groun
         assert.ok(metrics.base.x + metrics.base.radiusX <= footprintWidth);
         assert.ok(metrics.base.y - metrics.base.radiusY >= 0);
         assert.ok(metrics.base.y + metrics.base.radiusY <= footprintHeight);
-        assert.ok(metrics.shadow.x - (metrics.shadow.radiusX * 1.24) >= -1e-9);
-        assert.ok(metrics.shadow.x + (metrics.shadow.radiusX * 1.24) <= footprintWidth + 1e-9);
-        assert.ok(metrics.shadow.y - (metrics.shadow.radiusY * 1.34) >= -1e-9);
-        assert.ok(metrics.shadow.y + (metrics.shadow.radiusY * 1.34) <= footprintHeight + 1e-9);
+        assert.ok(metrics.shadow.radiusX <= 62);
+        assert.ok(metrics.shadow.radiusY <= 24);
+        assert.ok(Math.hypot(
+          metrics.shadow.x - metrics.base.x,
+          metrics.shadow.y - metrics.base.y
+        ) <= 75 + 1e-9);
       }
     }
   }
@@ -288,6 +289,24 @@ test("shadow becomes smaller and fainter with elevation", () => {
   const high = calculateVisualMetrics({ ...base, elevation: 120 });
   assert.ok(high.shadow.radiusX < low.shadow.radiusX);
   assert.ok(high.shadow.alpha < low.shadow.alpha);
+});
+
+test("keeps the height-cast and contact shadows prominent at tactical elevation", () => {
+  const metrics = calculateVisualMetrics({
+    ...base,
+    elevation: 60,
+    shadowOpacity: 0.5
+  });
+  const distance = Math.hypot(
+    metrics.shadow.x - metrics.base.x,
+    metrics.shadow.y - metrics.base.y
+  );
+
+  assert.ok(distance > 35, "60 ft shadow should visibly leave the ground marker");
+  assert.ok(metrics.shadow.alpha > 0.4, "cast shadow should survive height falloff");
+  assert.ok(metrics.shadow.radiusX > 28, "cast shadow should retain readable area");
+  assert.ok(metrics.shadow.contactAlpha >= 0.3, "base contact shadow should remain grounded");
+  assert.ok(metrics.shadow.contactCoreAlpha >= 0.38, "contact core should remain distinct");
 });
 
 test("cast shadow drifts outward while shrinking and fading after takeoff", () => {
@@ -318,7 +337,8 @@ test("contact shadow geometry and opacity remain fixed after the first five feet
     "contactRadiusY",
     "contactCoreRadiusX",
     "contactCoreRadiusY",
-    "contactAlpha"
+    "contactAlpha",
+    "contactCoreAlpha"
   ];
 
   for (const shadow of samples.slice(1)) {
@@ -356,7 +376,7 @@ test("ground projection ends at the fixed acrylic base and fades with height", (
   assert.ok(high.projection.alpha < low.projection.alpha);
 });
 
-test("keeps the full soft shadow and base inside the original footprint", () => {
+test("keeps the base and contact shadow inside the footprint while bounding the cast shadow", () => {
   const metrics = calculateVisualMetrics({
     ...base,
     elevation: 1_000_000,
@@ -369,10 +389,12 @@ test("keeps the full soft shadow and base inside the original footprint", () => 
   assert.ok(metrics.base.y - metrics.base.radiusY >= 0);
   assert.ok(metrics.base.y + metrics.base.radiusY <= 100);
   assert.ok(metrics.base.y + metrics.base.thickness + metrics.base.radiusY <= 100);
-  assert.ok(metrics.shadow.x - (metrics.shadow.radiusX * 1.24) >= -1e-9);
-  assert.ok(metrics.shadow.x + (metrics.shadow.radiusX * 1.24) <= 100 + 1e-9);
-  assert.ok(metrics.shadow.y - (metrics.shadow.radiusY * 1.34) >= -1e-9);
-  assert.ok(metrics.shadow.y + (metrics.shadow.radiusY * 1.34) <= 100 + 1e-9);
+  assert.ok(Math.hypot(
+    metrics.shadow.x - metrics.base.x,
+    metrics.shadow.y - metrics.base.y
+  ) <= 75 + 1e-9);
+  assert.ok(metrics.shadow.radiusX <= 62);
+  assert.ok(metrics.shadow.radiusY <= 24);
   assert.ok(metrics.shadow.contactX - (metrics.shadow.contactRadiusX * 1.12) >= 0);
   assert.ok(metrics.shadow.contactX + (metrics.shadow.contactRadiusX * 1.12) <= 100);
   assert.ok(metrics.shadow.contactY - (metrics.shadow.contactRadiusY * 1.16) >= 0);

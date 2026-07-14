@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.10 — Strong Height Shadows
+
+- Reworked the height-cast shadow into a much darker, higher-contrast three-layer MULTIPLY treatment that remains readable on bright and textured maps.
+- Increased cast-shadow travel and allowed it to extend beyond the original Token footprint instead of losing most of its height offset to footprint clamping.
+- Reduced high-elevation size and opacity falloff so the cast shadow remains broad and visible at common tactical heights.
+- Strengthened the fixed acrylic-base contact shadow and its dense core while keeping both inside the true ground footprint.
+- Raised the default Shadow Opacity from 0.50 to 0.65; the existing client setting still provides the full 0–1 adjustment range.
+- Preserved the event-free PIXI.Graphics implementation with no BlurFilter, per-frame geometry rebuild, Token data write, or rule impact.
+- Added regression thresholds for cast distance, visible area, effective layered opacity, contact strength, and finite extreme-height bounds.
+
 ## 0.4.9 — Lifted Labels During Movement
 
 - Fixed Foundry/PF2e native elevation labels dropping to the acrylic base while an airborne Token is dragged or animated to a new grid position with Z Scatter active.

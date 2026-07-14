@@ -62,7 +62,8 @@ const metrics = {
     contactRadiusY: 8,
     contactCoreRadiusX: 10,
     contactCoreRadiusY: 4,
-    contactAlpha: 0.24
+    contactAlpha: 0.24,
+    contactCoreAlpha: 0.3
   }
 };
 
@@ -119,7 +120,10 @@ test("uses three height layers and two contact layers without filters", () => {
     5
   );
   const fills = graphics.commands.filter(command => command[0] === "beginFill");
-  assert.ok(fills.every(command => command[2] > 0 && command[2] < 0.25));
+  assert.ok(fills.every(command => command[2] > 0 && command[2] <= 0.3));
+  const castOpacity = fills.slice(0, 3)
+    .reduce((combined, command) => 1 - ((1 - combined) * (1 - command[2])), 0);
+  assert.ok(castOpacity > 0.35, "layered cast shadow should remain clearly readable");
 
   renderer.render(metrics, false);
   assert.equal(graphics.visible, false);

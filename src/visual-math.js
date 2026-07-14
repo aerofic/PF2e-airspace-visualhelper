@@ -22,8 +22,6 @@ const STAND_LEAN_RADIANS = 12 * (Math.PI / 180);
 const MAX_CANVAS_DIMENSION = 1_000_000;
 const MAX_HEIGHT_STEPS = 1_000_000;
 const MAX_STAND_LEAN_GRIDS = 1.5;
-const SHADOW_OUTER_SCALE_X = 1.24;
-const SHADOW_OUTER_SCALE_Y = 1.34;
 const CONTACT_OUTER_SCALE_X = 1.12;
 const CONTACT_OUTER_SCALE_Y = 1.16;
 
@@ -200,33 +198,24 @@ export function calculateVisualMetrics({
 
   const distanceMultiplier = clamp(finiteOr(shadowDistanceMultiplier, 1), 0.25, 3);
   const desiredShadowDistance = safeGridSize * clamp(
-    (0.05 + (0.32 * signal)) * distanceMultiplier,
-    0.02,
-    0.55
+    (0.09 + (0.42 * signal)) * distanceMultiplier,
+    0.04,
+    0.75
   );
-  const shadowScale = 0.96 - (0.3 * signal);
-  const shadowFalloff = 1 - (0.58 * signal);
+  // The cast shadow is the primary height cue. Keep it broad and readable at
+  // altitude instead of shrinking and fading it into the map texture.
+  const shadowScale = 0.98 - (0.18 * signal);
+  const shadowFalloff = 1 - (0.28 * signal);
   const desiredShadowRadiusX = compressedRadius * 0.72 * shadowScale;
-  // Account for ShadowRenderer's outer soft ellipse so the complete visual,
-  // rather than only its nominal radius, remains in the footprint bounds.
-  const shadowRadiusX = Math.min(
-    desiredShadowRadiusX,
-    width / (2 * SHADOW_OUTER_SCALE_X)
-  );
+  const shadowRadiusX = Math.min(desiredShadowRadiusX, safeGridSize * 0.62);
   const shadowRadiusY = Math.min(
-    desiredShadowRadiusX * (0.3 - (0.05 * signal)),
-    height / (2 * SHADOW_OUTER_SCALE_Y)
+    desiredShadowRadiusX * (0.34 - (0.04 * signal)),
+    safeGridSize * 0.24
   );
-  const shadowX = clampEllipseCenter(
-    pose.ground.x + (desiredShadowDistance * 0.91),
-    shadowRadiusX * SHADOW_OUTER_SCALE_X,
-    width
-  );
-  const shadowY = clampEllipseCenter(
-    pose.ground.y + (desiredShadowDistance * 0.41),
-    shadowRadiusY * SHADOW_OUTER_SCALE_Y,
-    height
-  );
+  // A height-cast shadow may leave the original Token footprint. Confining it
+  // to one grid square erased most of the visible offset at useful heights.
+  const shadowX = pose.ground.x + (desiredShadowDistance * 0.88);
+  const shadowY = pose.ground.y + (desiredShadowDistance * 0.47);
 
   // Contact shadow belongs to the physical ground plate and does not drift or
   // fade with height once the Token has completed its first 5 ft of takeoff.
@@ -315,7 +304,8 @@ export function calculateVisualMetrics({
       contactRadiusY,
       contactCoreRadiusX,
       contactCoreRadiusY,
-      contactAlpha: normalizedShadowOpacity * 0.42 * takeoff
+      contactAlpha: normalizedShadowOpacity * 0.62 * takeoff,
+      contactCoreAlpha: normalizedShadowOpacity * 0.76 * takeoff
     },
     projection: {
       startX: pose.standTop.x,
@@ -444,7 +434,8 @@ function emptyMetrics({ pose, width, height }) {
       contactRadiusY: 0,
       contactCoreRadiusX: 0,
       contactCoreRadiusY: 0,
-      contactAlpha: 0
+      contactAlpha: 0,
+      contactCoreAlpha: 0
     },
     projection: {
       startX: ground.x,

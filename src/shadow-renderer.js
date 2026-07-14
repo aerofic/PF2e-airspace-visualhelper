@@ -1,4 +1,4 @@
-const SHADOW_COLOR = 0x11171a;
+const SHADOW_COLOR = 0x071014;
 
 /** Soft projected shadow renderer; avoids one BlurFilter allocation per Token. */
 export class ShadowRenderer {
@@ -33,23 +33,23 @@ export class ShadowRenderer {
       contactAlpha
     } = shadow;
 
-    // Three offset ellipses approximate a soft penumbra. Their low individual
-    // weights remain readable when multiplied together without becoming a
-    // single opaque black patch.
-    graphics.beginFill(SHADOW_COLOR, alpha * 0.16)
+    // Three nested ellipses approximate a soft penumbra without allocating a
+    // BlurFilter per Token. Deliberately strong MULTIPLY weights keep the cast
+    // shadow readable on bright, textured battlemaps and at high elevation.
+    graphics.beginFill(SHADOW_COLOR, alpha * 0.28)
       .drawEllipse(x, y, radiusX * 1.24, radiusY * 1.34)
       .endFill();
-    graphics.beginFill(SHADOW_COLOR, alpha * 0.27)
+    graphics.beginFill(SHADOW_COLOR, alpha * 0.46)
       .drawEllipse(x, y, radiusX * 1.07, radiusY * 1.12)
       .endFill();
-    graphics.beginFill(SHADOW_COLOR, alpha * 0.39)
+    graphics.beginFill(SHADOW_COLOR, alpha * 0.68)
       .drawEllipse(x, y, radiusX * 0.84, radiusY * 0.84)
       .endFill();
 
     // The outer contact shadow marks the exact ground footprint. A tighter
     // core supplies physical weight at the acrylic plate without using a
     // per-Token blur filter.
-    graphics.beginFill(SHADOW_COLOR, contactAlpha * 0.62)
+    graphics.beginFill(SHADOW_COLOR, contactAlpha * 0.76)
       .drawEllipse(contactX, contactY, contactRadiusX * 1.12, contactRadiusY * 1.16)
       .endFill();
     graphics.beginFill(
