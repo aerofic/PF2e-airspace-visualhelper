@@ -1,7 +1,18 @@
 <section class="airspace-controls" aria-label="{{localize 'PF2E_FLYING_VISUAL_HELPER.Airspace.title'}}">
-  <div class="airspace-range">
-    <label for="pf2e-flying-airspace-radius">
-      {{localize "PF2E_FLYING_VISUAL_HELPER.Airspace.range"}}
+  <div class="airspace-toolbar {{#if hasSelection}}has-selection{{/if}}">
+    {{#if hasSelection}}
+      <div class="airspace-anchor" title="{{selected.tooltipText}}">
+        <img src="{{selected.img}}" alt="">
+        <span>{{selected.name}}</span>
+        <strong>{{selected.elevationLabel}}</strong>
+        <small class="airspace-visually-hidden">
+          {{nearbyCount}} {{localize "PF2E_FLYING_VISUAL_HELPER.Airspace.visible"}}
+        </small>
+      </div>
+    {{/if}}
+    <label for="pf2e-flying-airspace-radius" title="{{localize 'PF2E_FLYING_VISUAL_HELPER.Airspace.range'}}">
+      <i class="fa-solid fa-arrows-to-circle" aria-hidden="true"></i>
+      <span class="airspace-visually-hidden">{{localize "PF2E_FLYING_VISUAL_HELPER.Airspace.range"}}</span>
     </label>
     <input
       id="pf2e-flying-airspace-radius"
@@ -13,7 +24,7 @@
       data-airspace-radius
       aria-label="{{localize 'PF2E_FLYING_VISUAL_HELPER.Airspace.range'}}"
     >
-    <output for="pf2e-flying-airspace-radius" data-airspace-radius-output>{{radius.label}}</output>
+    <output for="pf2e-flying-airspace-radius" data-airspace-radius-output title="{{localize 'PF2E_FLYING_VISUAL_HELPER.Airspace.range'}}">{{radius.label}}</output>
     <button
       type="button"
       class="airspace-reset-camera"

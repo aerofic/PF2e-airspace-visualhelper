@@ -105,6 +105,14 @@ test("opens only when toggle is explicitly invoked and defaults to eight spaces"
   assert.equal(explorer.positionCalls.length, 0);
 });
 
+test("refreshes the compact toolbar when Token control changes", () => {
+  const explorer = new AirspaceExplorer();
+  let refreshOptions = null;
+  explorer.requestRefresh = options => { refreshOptions = options; };
+  explorer.onControlToken({ id: "selected" }, true);
+  assert.deepEqual(refreshOptions, { immediate: true, includeControls: true });
+});
+
 test("builds a real XYZ view around the controlled Token", async () => {
   const scene = { id: "scene", grid: { units: "ft" } };
   const anchor = createToken({ id: "anchor", scene, x: 100, y: 100, elevation: 20 });
@@ -135,6 +143,9 @@ test("templates expose range, orbit camera, selection, and native Target control
   assert.match(controls, /type="range"/);
   assert.match(controls, /data-airspace-radius/);
   assert.match(controls, /data-action="resetCamera"/);
+  assert.match(controls, /class="airspace-anchor"/);
+  assert.match(controls, /airspace-visually-hidden/);
+  assert.doesNotMatch(view, /class="airspace-anchor"/);
   assert.match(view, /data-airspace-camera/);
   assert.match(view, /data-action="selectToken"/);
   assert.match(view, /data-action="targetToken"/);
@@ -152,6 +163,8 @@ test("CSS keeps the floating tactical view highly transparent and orbitable", ()
   assert.match(css, /\.airspace-explorer \.airspace-stage/);
   assert.match(rootRule, /--airspace-token-art-size:\s*40px/);
   assert.match(rootRule, /--airspace-token-node-width:\s*60px/);
+  assert.match(rootRule, /--header-height:\s*24px/);
+  assert.match(css, /\.airspace-toolbar[\s\S]*min-height:\s*30px/);
   assert.match(css, /cursor:\s*grab/);
   assert.match(css, /touch-action:\s*none/);
 });

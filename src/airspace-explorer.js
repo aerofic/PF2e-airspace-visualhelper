@@ -84,7 +84,9 @@ export class AirspaceExplorer extends HandlebarsApplicationMixin(ApplicationV2) 
         radiusSpaces: this.#radiusSpaces,
         gridDistance: canvas.grid?.distance ?? canvas.dimensions?.distance ?? 5,
         width: Math.max(318, (Number(this.position?.width) || AIRSPACE_EXPLORER_POSITION.width) - 18),
-        height: Math.max(348, (Number(this.position?.height) || AIRSPACE_EXPLORER_POSITION.height) - 112),
+        // Native header and the merged compact toolbar consume about 54 px.
+        // Keep a small safety allowance for borders and viewport clamping.
+        height: Math.max(348, (Number(this.position?.height) || AIRSPACE_EXPLORER_POSITION.height) - 66),
         camera: this.#camera
       })
       : null;
@@ -206,7 +208,7 @@ export class AirspaceExplorer extends HandlebarsApplicationMixin(ApplicationV2) 
     else if (token?.id === this.#selectedTokenId) {
       this.#selectedTokenId = canvas.tokens?.controlled?.at(-1)?.id ?? null;
     }
-    this.requestRefresh({ immediate: true });
+    this.requestRefresh({ immediate: true, includeControls: true });
   }
 
   setRadius(value, { refresh = true } = {}) {
