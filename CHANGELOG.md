@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.2 — Compact Airspace Chrome
+
+- Compressed the 3D airspace chrome into a 24 px native drag header and one 30 px toolbar which combines the selected Token, exact elevation, range slider, range value, and camera reset action.
+- Removed the separate selected-Token summary row and reassigned its vertical space to the orbitable 3D view; secondary nearby-count text remains available to assistive technology instead of occupying the Canvas.
+
 ## 0.6.1 — Orbitable Floating Airspace
 
 - Replaced the fixed side presentation with a highly transparent native ApplicationV2 airspace window whose opening size adapts once to viewport space and visible Token density.

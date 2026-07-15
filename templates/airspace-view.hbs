@@ -1,12 +1,5 @@
 <section class="airspace-view">
   {{#if hasSelection}}
-    <div class="airspace-anchor" title="{{selected.tooltipText}}">
-      <img src="{{selected.img}}" alt="">
-      <span>{{selected.name}}</span>
-      <strong>{{selected.elevationLabel}}</strong>
-      <small>{{nearbyCount}} {{localize "PF2E_FLYING_VISUAL_HELPER.Airspace.visible"}}</small>
-    </div>
-
     <div
       class="airspace-stage"
       style="--airspace-width: {{view.width}}px; --airspace-height: {{view.height}}px;"

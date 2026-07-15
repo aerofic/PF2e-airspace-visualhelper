@@ -39,7 +39,7 @@ Hooks.on("canvasTearDown", tearingDownCanvas => {
 
 Hooks.on("drawToken", token => {
   flyingVisualLayer.onDrawToken(token);
-  airspaceExplorer.requestRefresh();
+  airspaceExplorer.requestRefresh({ includeControls: true });
 });
 
 Hooks.on("refreshToken", (token, flags = {}) => {
@@ -48,27 +48,27 @@ Hooks.on("refreshToken", (token, flags = {}) => {
 
 Hooks.on("destroyToken", token => {
   flyingVisualLayer.onDestroyToken(token);
-  airspaceExplorer.requestRefresh();
+  airspaceExplorer.requestRefresh({ includeControls: true });
 });
 
 Hooks.on("createToken", document => {
-  if (document.parent === canvas.scene) airspaceExplorer.requestRefresh();
+  if (document.parent === canvas.scene) airspaceExplorer.requestRefresh({ includeControls: true });
 });
 
 Hooks.on("deleteToken", document => {
-  if (document.parent === canvas.scene) airspaceExplorer.requestRefresh();
+  if (document.parent === canvas.scene) airspaceExplorer.requestRefresh({ includeControls: true });
 });
 
 Hooks.on("updateToken", (document, changes, options, userId) => {
   flyingVisualLayer.onUpdateToken(document, changes, options, userId);
   if ((document.parent === canvas.scene) && tokenChangesAffectAirspace(changes)) {
-    airspaceExplorer.requestRefresh();
+    airspaceExplorer.requestRefresh({ includeControls: true });
   }
 });
 
 Hooks.on("moveToken", (document, movement, operation, user) => {
   flyingVisualLayer.onMoveToken(document, movement, operation, user);
-  if (document.parent === canvas.scene) airspaceExplorer.requestRefresh();
+  if (document.parent === canvas.scene) airspaceExplorer.requestRefresh({ includeControls: true });
 });
 
 Hooks.on("controlToken", (token, controlled) => {
@@ -84,7 +84,7 @@ Hooks.on("hoverToken", token => {
 
 Hooks.on("updateActor", (actor, changes) => {
   if (!airspaceExplorer.rendered || !("name" in changes || "system" in changes)) return;
-  if (actorHasSceneToken(actor)) airspaceExplorer.requestRefresh();
+  if (actorHasSceneToken(actor)) airspaceExplorer.requestRefresh({ includeControls: true });
 });
 
 // PF2e prepared Fly Speed can be contributed by embedded Items and Rule
@@ -94,17 +94,17 @@ for (const hookName of ["createItem", "updateItem", "deleteItem"]) {
     if (!airspaceExplorer.rendered) return;
     const actor = item.parent;
     if (actor?.documentName === "Actor" && actorHasSceneToken(actor)) {
-      airspaceExplorer.requestRefresh();
+      airspaceExplorer.requestRefresh({ includeControls: true });
     }
   });
 }
 
-Hooks.on("sightRefresh", () => airspaceExplorer.requestRefresh());
+Hooks.on("sightRefresh", () => airspaceExplorer.requestRefresh({ includeControls: true }));
 
 Hooks.on("updateScene", (scene, changes) => {
   if (scene !== canvas.scene) return;
   if ("grid" in changes) flyingVisualLayer.refreshAll();
-  if ("grid" in changes || "name" in changes) airspaceExplorer.requestRefresh();
+  if ("grid" in changes || "name" in changes) airspaceExplorer.requestRefresh({ includeControls: true });
 });
 
 Hooks.on("getSceneControlButtons", controls => {
