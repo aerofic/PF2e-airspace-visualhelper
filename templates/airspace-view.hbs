@@ -10,9 +10,14 @@
     <div
       class="airspace-stage"
       style="--airspace-width: {{view.width}}px; --airspace-height: {{view.height}}px;"
+      data-airspace-camera
       role="region"
       aria-label="{{localize 'PF2E_FLYING_VISUAL_HELPER.Airspace.viewLabel'}}"
     >
+      <div class="airspace-camera-help" aria-hidden="true">
+        <span>{{localize "PF2E_FLYING_VISUAL_HELPER.Airspace.orbitHint"}}</span>
+        <strong>{{camera.zoomLabel}}</strong>
+      </div>
       <svg class="airspace-grid" viewBox="0 0 {{view.width}} {{view.height}}" aria-hidden="true">
         <ellipse cx="{{view.centerX}}" cy="{{view.groundCenterY}}" rx="{{view.groundRadiusX}}" ry="{{view.groundRadiusY}}"></ellipse>
         {{#each view.gridLines}}

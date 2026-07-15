@@ -1,5 +1,3 @@
-import { FlyingStand } from "./flying-stand.js";
-import { ProjectionRenderer } from "./projection-renderer.js";
 import { ShadowRenderer } from "./shadow-renderer.js";
 import { TokenLiftRenderer } from "./token-lift-renderer.js";
 import { ZScatterCompatibility } from "./z-scatter-compatibility.js";
@@ -42,8 +40,6 @@ export class FlyingTokenVisual {
     this.ambientPeriod = 2800 + (motionSeed % 801);
     this.reducedMotion = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
     this.metrics = null;
-    this.lastProjectionEmphasized = null;
-    this.lastStandEmphasized = null;
     this.liftEnabled = false;
     this.zScatterCompatibility = new ZScatterCompatibility(token);
 
@@ -52,31 +48,21 @@ export class FlyingTokenVisual {
     this.container.eventMode = "none";
     this.container.interactiveChildren = false;
     this.container.sortableChildren = true;
-    // PrimaryCanvasGroup sorts elevation before layer. Matching the visual's
-    // animated flight elevation keeps its base and stand above lower/ground
-    // Token art. The pre-Token layer still keeps the aid below Token artwork
-    // at the same elevation, including the flying Token it belongs to.
+    // The takeoff shadow is ground geometry. Keep it below Token artwork at
+    // elevation zero even while the associated rendered mesh appears lifted.
     const tokenSortLayer = Number(parent?.constructor?.SORT_LAYERS?.TOKENS) || 700;
-    this.container.elevation = this.displayElevation;
+    this.container.elevation = 0;
     this.container.sortLayer = tokenSortLayer - 1;
     this.container.sort = -1_000_000;
     this.container.zIndex = -1_000_000;
 
     this.shadowGraphics = this.container.addChild(new PIXI.Graphics());
-    this.projectionGraphics = this.container.addChild(new PIXI.Graphics());
-    this.standGraphics = this.container.addChild(new PIXI.Graphics());
-    this.standSpecularGraphics = this.container.addChild(new PIXI.Graphics());
-    // Added after the legacy Graphics children to keep stable child indices
-    // for integrations, while zIndex places the two silhouettes around the
-    // rod/contact Graphics at render time.
     this.shadowPenumbraSprite = this.container.addChild(new PIXI.Sprite());
     this.shadowCoreSprite = this.container.addChild(new PIXI.Sprite());
     this.shadow = new ShadowRenderer(this.shadowGraphics, {
       penumbraSprite: this.shadowPenumbraSprite,
       coreSprite: this.shadowCoreSprite
     });
-    this.projection = new ProjectionRenderer(this.projectionGraphics);
-    this.stand = new FlyingStand(this.standGraphics, this.standSpecularGraphics);
     this.tokenLift = new TokenLiftRenderer(token);
 
     parent.addChild(this.container);
@@ -99,7 +85,7 @@ export class FlyingTokenVisual {
       && !this.animation
       && !this.followingCoreAnimation
       && !!this.metrics?.flying
-      && !!this.container.visible
+      && this.liftEnabled
       && ((this.metrics?.token?.bobAmplitude ?? 0) > VISUAL_EPSILON);
   }
 
@@ -270,7 +256,6 @@ export class FlyingTokenVisual {
     }
     if (flags.refreshState || flags.refreshVisibility) {
       this.#updateVisibility();
-      this.#refreshProjectionEmphasis();
     }
     // Horizontal movement does not rebuild any Graphics. Foundry has just put
     // the Primary mesh back at token.center, so reapply the cached visual pose.
@@ -303,7 +288,6 @@ export class FlyingTokenVisual {
     uiRetainsOwnedOffset = false
   } = {}) {
     if (this.container.destroyed || this.token.destroyed) return;
-    this.#syncSortElevation();
     this.#syncCompatibility({ enabled: (this.displayElevation > 0) || (this.targetElevation > 0) });
     this.#syncPosition();
     const size = this.token.document.getSize();
@@ -316,9 +300,7 @@ export class FlyingTokenVisual {
       tokenHeight: size.height,
       groundX: ground.x,
       groundY: ground.y,
-      standOpacity: this.settings.standOpacity,
-      shadowOpacity: this.settings.shadowOpacity,
-      projectionOpacity: this.settings.projectionOpacity
+      shadowOpacity: this.settings.shadowOpacity
     });
     this.metrics = metrics;
     this.#syncCompatibility({ enabled: this.#shouldEnableTokenLift(metrics) });
@@ -379,7 +361,7 @@ export class FlyingTokenVisual {
   #shouldEnableTokenLift(metrics = this.metrics) {
     if (!metrics) return false;
     const visibleToUser = (this.token.visible !== false) && !this.token.document.isSecret;
-    return metrics.flying && visibleToUser && this.#hasVisibleGeometry(metrics);
+    return metrics.flying && visibleToUser;
   }
 
   #updateVisibility() {
@@ -401,34 +383,6 @@ export class FlyingTokenVisual {
       anchorY: mesh?.anchor?.y ?? 0.5
     });
     this.shadow.applyAmbient(this.ambientOffsetY);
-    this.#renderProjection();
-    this.#renderStand();
-  }
-
-  #renderProjection() {
-    const metrics = this.metrics;
-    if (!metrics) return;
-    const emphasized = !!(this.token.controlled || this.token.hover);
-    this.projection.render(metrics, this.settings.enableGroundProjection, {
-      standEnabled: this.settings.enableStand && (metrics.stand.opacity > VISUAL_EPSILON),
-      emphasized,
-      footprintShape: this.token.shape ?? null
-    });
-    this.lastProjectionEmphasized = emphasized;
-  }
-
-  #refreshProjectionEmphasis() {
-    const emphasized = !!(this.token.controlled || this.token.hover);
-    if (emphasized !== this.lastProjectionEmphasized) this.#renderProjection();
-    if (emphasized !== this.lastStandEmphasized) this.#renderStand();
-  }
-
-  #renderStand() {
-    const metrics = this.metrics;
-    if (!metrics) return;
-    const emphasized = !!(this.token.controlled || this.token.hover);
-    this.stand.render(metrics, this.settings.enableStand, { emphasized });
-    this.lastStandEmphasized = emphasized;
   }
 
   #resetAmbientMotion({ apply = false } = {}) {
@@ -443,19 +397,13 @@ export class FlyingTokenVisual {
   }
 
   #hasVisibleGeometry(metrics) {
-    return (this.settings.enableStand && (metrics.stand.opacity > VISUAL_EPSILON))
-      || (this.settings.enableShadow
-        && ((metrics.shadow.alpha > VISUAL_EPSILON) || (metrics.shadow.contactAlpha > VISUAL_EPSILON)))
-      || (this.settings.enableGroundProjection && (metrics.projection.alpha > VISUAL_EPSILON));
+    return this.settings.enableShadow && (metrics.shadow.alpha > VISUAL_EPSILON);
   }
 
   #syncPosition() {
     if (this.container.destroyed) return;
-    const layout = this.zScatterCompatibility.state;
-    const scatterX = layout.supported ? layout.offsetX : 0;
-    const scatterY = layout.supported ? layout.offsetY : 0;
-    const x = (Number(this.token.position?.x ?? this.token.document?.x) || 0) + scatterX;
-    const y = (Number(this.token.position?.y ?? this.token.document?.y) || 0) + scatterY;
+    const x = Number(this.token.position?.x ?? this.token.document?.x) || 0;
+    const y = Number(this.token.position?.y ?? this.token.document?.y) || 0;
     if (this.container.position?.set) this.container.position.set(x, y);
     else {
       this.container.x = x;
@@ -463,31 +411,17 @@ export class FlyingTokenVisual {
     }
   }
 
-  /** Keep PrimaryCanvasGroup ordering aligned with the animated visual height. */
-  #syncSortElevation() {
-    if (this.container.destroyed) return;
-    const elevation = normalizeFlyingElevation(this.displayElevation);
-    if (this.container.elevation === elevation) return;
-    this.container.elevation = elevation;
-    // PrimaryCanvasGroup/Pixi only re-sorts sortable children when dirty.
-    // This is local render state and never changes TokenDocument.elevation.
-    if (this.parent && !this.parent.destroyed) this.parent.sortDirty = true;
-  }
-
   #getLocalGround(size) {
     const centerX = Number(this.token.center?.x);
     const centerY = Number(this.token.center?.y);
     const originX = Number(this.container.position?.x ?? this.container.x);
     const originY = Number(this.container.position?.y ?? this.container.y);
-    const layout = this.zScatterCompatibility.state;
-    const scatterX = layout.supported ? layout.offsetX : 0;
-    const scatterY = layout.supported ? layout.offsetY : 0;
     return {
       x: Number.isFinite(centerX) && Number.isFinite(originX)
-        ? centerX + scatterX - originX
+        ? centerX - originX
         : size.width / 2,
       y: Number.isFinite(centerY) && Number.isFinite(originY)
-        ? centerY + scatterY - originY
+        ? centerY - originY
         : size.height / 2
     };
   }

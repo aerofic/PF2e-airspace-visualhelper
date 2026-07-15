@@ -10,7 +10,7 @@
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableStand.name": "启用俯视亚克力底盘",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableStand.hint": "绘制同心透明飞行底盘边缘、折射高光和相机轴向支撑点。",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableShadow.name": "启用地面阴影",
-  "PF2E_FLYING_VISUAL_HELPER.Settings.enableShadow.hint": "在 Token 原始格位正下方绘制清晰且受占地范围约束的真实纹理阴影。",
+  "PF2E_FLYING_VISUAL_HELPER.Settings.enableShadow.hint": "以原始占地为基准绘制强烈的 Token 纹理起飞投影，并只随高度和摇摆轻微漂移。",
   "PF2E_FLYING_VISUAL_HELPER.Settings.standOpacity.name": "底盘透明度",
   "PF2E_FLYING_VISUAL_HELPER.Settings.standOpacity.hint": "调整俯视亚克力边缘、支撑点与交互增强线的透明度。",
   "PF2E_FLYING_VISUAL_HELPER.Settings.shadowOpacity.name": "阴影透明度",
@@ -32,5 +32,7 @@
   "PF2E_FLYING_VISUAL_HELPER.Airspace.targetToken": "将 {name} 设为目标",
   "PF2E_FLYING_VISUAL_HELPER.Airspace.untargetToken": "取消以 {name} 为目标",
   "PF2E_FLYING_VISUAL_HELPER.Airspace.controlButton": "打开 3D 空域展开图",
-  "PF2E_FLYING_VISUAL_HELPER.Airspace.drag": "拖动 3D 空域展开图"
+  "PF2E_FLYING_VISUAL_HELPER.Airspace.drag": "拖动 3D 空域悬浮框",
+  "PF2E_FLYING_VISUAL_HELPER.Airspace.resetCamera": "重置 3D 镜头",
+  "PF2E_FLYING_VISUAL_HELPER.Airspace.orbitHint": "拖动旋转 · 滚轮缩放"
 }

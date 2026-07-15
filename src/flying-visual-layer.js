@@ -5,10 +5,10 @@ import { normalizeFlyingElevation } from "./visual-math.js";
 
 /**
  * Canvas lifecycle manager for all flight visuals in the viewed Scene.
- * The acrylic plate remains concentric with the TokenDocument footprint. A
- * reversible Primary mesh offset applies only a few pixels of top-view
- * parallax, while Foundry's refreshPosition hook keeps movement previews
- * snapped to the rules position without rebuilding height geometry.
+ * The takeoff shadow remains fixed at the TokenDocument footprint. A
+ * reversible Primary mesh offset applies the bounded height cue, while
+ * Foundry's refreshPosition hook keeps movement previews snapped to the rules
+ * position without rebuilding shadow geometry.
  */
 export class FlyingVisualLayer {
   #canvas = null;
