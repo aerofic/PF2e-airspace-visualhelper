@@ -62,27 +62,25 @@ class FakeContainer {
   }
 }
 
-test("sorts the acrylic base above lower Tokens and below same-height Token art", () => {
+test("sorts the takeoff shadow below ground and flying Token artwork", () => {
   const parent = new FakeContainer();
   const token = makeToken(60);
   const visual = new FlyingTokenVisual(token, settings, { parent });
   const groundTokenMesh = { id: "ground", elevation: 0, sortLayer: 700, sort: 0 };
   const ownFlyingMesh = { id: "flying", elevation: 60, sortLayer: 700, sort: 0 };
-  visual.container.id = "stand";
+  visual.container.id = "shadow";
 
   const ordered = [ownFlyingMesh, visual.container, groundTokenMesh]
     .sort(comparePrimaryDisplayObjects)
     .map(object => object.id);
-  assert.deepEqual(ordered, ["ground", "stand", "flying"]);
-  assert.equal(visual.container.elevation, 60);
+  assert.deepEqual(ordered, ["shadow", "ground", "flying"]);
+  assert.equal(visual.container.elevation, 0);
   assert.equal(visual.container.sortLayer, 699);
   assert.equal(visual.container.eventMode, "none");
   assert.equal(visual.container.interactiveChildren, false);
 
-  parent.sortDirty = false;
   visual.setElevation(20, { animate: false });
-  assert.equal(visual.container.elevation, 20);
-  assert.equal(parent.sortDirty, true, "height changes must invalidate Primary sorting");
+  assert.equal(visual.container.elevation, 0);
   assert.equal(token.document.elevation, 60, "visual sorting must not write Token data");
   visual.destroy();
 });
@@ -146,13 +144,8 @@ globalThis.canvas = {
 globalThis.matchMedia = () => ({ matches: false });
 
 const settings = {
-  enableStand: true,
   enableShadow: true,
-  enableGroundProjection: true,
-  standOpacity: 0.4,
-  shadowOpacity: 0.35,
-  projectionOpacity: 0.42,
-  shadowDistanceMultiplier: 1
+  shadowOpacity: 0.35
 };
 
 function makeToken(elevation) {
@@ -206,9 +199,9 @@ test("moves native elevation UI with the artwork without changing visibility or 
   assertClose(token.tooltip.y, -7 + offsetY);
   assertClose(token.levelIndicator.x, 61 + offsetX);
   assertClose(token.levelIndicator.y, -29 + offsetY);
-  assert.equal(visual.container.children.length, 6);
-  assert.ok(visual.container.children.slice(0, 4).every(child => child instanceof FakeGraphics));
-  assert.ok(visual.container.children.slice(4).every(child => child instanceof FakeSprite));
+  assert.equal(visual.container.children.length, 3);
+  assert.ok(visual.container.children[0] instanceof FakeGraphics);
+  assert.ok(visual.container.children.slice(1).every(child => child instanceof FakeSprite));
 
   visual.updateSettings({ ...settings });
   assert.equal(token.tooltip.renderable, true);
@@ -231,7 +224,7 @@ test("moves native elevation UI with the artwork without changing visibility or 
   assert.equal(visual.container.destroyed, true);
 });
 
-test("smoothly interpolates stand and shadow state without changing Token data", () => {
+test("smoothly interpolates lift and shadow state without changing Token data", () => {
   const token = makeToken(0);
   const visual = new FlyingTokenVisual(token, settings);
   const originalElevation = token.document.elevation;
@@ -241,9 +234,8 @@ test("smoothly interpolates stand and shadow state without changing Token data",
   const { startedAt, duration } = visual.animation;
   assert.equal(visual.tick(startedAt + (duration / 2)), true);
   assert.ok(visual.displayElevation > 0 && visual.displayElevation < 60);
-  assert.ok(visual.standGraphics.commands.length > 0);
-  assert.ok(visual.shadowGraphics.commands.length > 0);
-  assert.ok(visual.projectionGraphics.commands.length > 0);
+  assert.equal(visual.shadowCoreSprite.visible, true);
+  assert.equal(visual.shadowPenumbraSprite.visible, true);
   assert.ok(token.mesh.y < token.center.y);
 
   assert.equal(visual.tick(startedAt + duration), true);
@@ -254,7 +246,7 @@ test("smoothly interpolates stand and shadow state without changing Token data",
   visual.destroy();
 });
 
-test("keeps the ground base snapped while only the rendered mesh moves", () => {
+test("keeps the takeoff shadow snapped while only the rendered mesh moves", () => {
   const token = makeToken(60);
   setTokenPosition(token, 200, 300);
   const visual = new FlyingTokenVisual(token, settings);
@@ -262,12 +254,10 @@ test("keeps the ground base snapped while only the rendered mesh moves", () => {
     x: token.mesh.x - token.center.x,
     y: token.mesh.y - token.center.y
   };
-  const standCommandCount = visual.standGraphics.commands.length;
-  const commandReferences = visual.container.children.slice(0, 4)
-    .map(graphics => graphics.commands);
+  const shadowCommands = visual.shadowGraphics.commands;
 
   assert.deepEqual(
-    [visual.container.x + visual.metrics.base.x, visual.container.y + visual.metrics.base.y],
+    [visual.container.x + visual.metrics.shadow.groundX, visual.container.y + visual.metrics.shadow.groundY],
     [token.center.x, token.center.y]
   );
   assert.equal(offset.x, 0);
@@ -285,22 +275,19 @@ test("keeps the ground base snapped while only the rendered mesh moves", () => {
   assert.deepEqual([token.document.x, token.document.y], [500, 400]);
   assert.deepEqual([visual.container.x, visual.container.y], [500, 400]);
   assert.deepEqual(
-    [visual.container.x + visual.metrics.base.x, visual.container.y + visual.metrics.base.y],
+    [visual.container.x + visual.metrics.shadow.groundX, visual.container.y + visual.metrics.shadow.groundY],
     [token.center.x, token.center.y]
   );
   assert.ok(Math.abs(token.mesh.x - (token.center.x + offset.x)) < 1e-9);
   assert.ok(Math.abs(token.mesh.y - (token.center.y + offset.y)) < 1e-9);
-  assert.equal(visual.standGraphics.commands.length, standCommandCount);
-  visual.container.children.slice(0, 4).forEach((graphics, index) => {
-    assert.strictEqual(graphics.commands, commandReferences[index]);
-  });
+  assert.strictEqual(visual.shadowGraphics.commands, shadowCommands);
 
   visual.destroy();
   assert.deepEqual([token.mesh.x, token.mesh.y], [token.center.x, token.center.y]);
   assert.deepEqual([token.tooltip.x, token.tooltip.y], [50, -4]);
 });
 
-test("composes Z Scatter offsets into the base, lifted art, native UI, and hit area", () => {
+test("keeps the shadow on the rules square while composing Z Scatter into lifted art", () => {
   const previousGame = globalThis.game;
   globalThis.game = {
     modules: new Map([["z-scatter", { active: true }]])
@@ -314,7 +301,7 @@ test("composes Z Scatter offsets into the base, lifted art, native UI, and hit a
     visual.setReducedMotion(true);
 
     assert.equal(visual.requiresTicker, true, "Z Scatter monitoring must survive reduced motion");
-    assert.deepEqual([visual.container.x, visual.container.y], [18, -10]);
+    assert.deepEqual([visual.container.x, visual.container.y], [0, 0]);
     assertClose(token.mesh.x, 68 + visual.metrics.token.offsetX);
     assertClose(token.mesh.y, 40 + visual.metrics.token.offsetY);
     assertClose(token.tooltip.x, 68 + visual.metrics.token.offsetX);
@@ -329,7 +316,7 @@ test("composes Z Scatter offsets into the base, lifted art, native UI, and hit a
     // Z Scatter writes directly outside refreshToken during its queued layout.
     const latestScatterHitArea = applyFakeZScatter(token, -14, 12);
     visual.tick(performance.now() + 200);
-    assert.deepEqual([visual.container.x, visual.container.y], [-14, 12]);
+    assert.deepEqual([visual.container.x, visual.container.y], [0, 0]);
     assertClose(token.mesh.x, 36 + visual.metrics.token.offsetX);
     assertClose(token.mesh.y, 62 + visual.metrics.token.offsetY);
     assertClose(token.tooltip.x, 36 + visual.metrics.token.offsetX);
@@ -389,9 +376,9 @@ test("anchors non-rectangular Token shapes to Foundry's actual local center", ()
   setTokenPosition(token, 200, 300);
   const visual = new FlyingTokenVisual(token, settings);
 
-  assert.deepEqual([visual.metrics.base.x, visual.metrics.base.y], [42, 61]);
+  assert.deepEqual([visual.metrics.shadow.groundX, visual.metrics.shadow.groundY], [42, 61]);
   assert.deepEqual(
-    [visual.container.x + visual.metrics.base.x, visual.container.y + visual.metrics.base.y],
+    [visual.container.x + visual.metrics.shadow.groundX, visual.container.y + visual.metrics.shadow.groundY],
     [token.center.x, token.center.y]
   );
   visual.destroy();
@@ -401,42 +388,18 @@ test("anchors non-rectangular Token shapes to Foundry's actual local center", ()
 test("renders the Token texture silhouette on its original ground square", () => {
   const token = makeToken(60);
   const visual = new FlyingTokenVisual(token, settings);
-  const standEllipses = visual.standGraphics.commands.filter(command => command[0] === "drawEllipse");
-  const specularLines = visual.standSpecularGraphics.commands
-    .filter(command => command[0] === "lineStyle");
-  const shadowFills = visual.shadowGraphics.commands.filter(command => command[0] === "beginFill");
-
-  assert.equal(visual.standGraphics.commands.filter(command => command[0] === "drawPolygon").length, 0);
-  assert.ok(standEllipses.length >= 3);
-  assert.ok(specularLines.length >= 3);
-  assert.ok(Math.max(...specularLines.map(command => command[1])) <= 3.5);
-  assert.equal(visual.standSpecularGraphics.blendMode, "screen");
-  assert.equal(shadowFills.length, 2);
-  assert.equal(
-    visual.shadowGraphics.commands.filter(command => command[0] === "drawPolygon").length,
-    0
-  );
-  assert.ok(Math.max(...shadowFills.map(command => command[2])) > 0.1);
+  assert.equal(visual.shadowGraphics.commands.length, 0, "texture path needs no fallback geometry");
   assert.equal(visual.shadowCoreSprite.texture, token.mesh.texture);
   assert.equal(visual.shadowCoreSprite.visible, true);
   assert.equal(visual.shadowPenumbraSprite.visible, true);
-  assert.ok(
-    visual.shadowGraphics.zIndex > visual.shadowCoreSprite.zIndex,
-    "projected rod must remain readable across the Token cast"
-  );
   assertClose(visual.shadowCoreSprite.x, visual.metrics.shadow.x);
   assertClose(visual.shadowCoreSprite.y, visual.metrics.shadow.y);
-  assertClose(visual.shadowCoreSprite.x, visual.metrics.base.x);
-  assertClose(visual.shadowCoreSprite.y, visual.metrics.base.y);
+  assertClose(visual.shadowCoreSprite.x, visual.metrics.shadow.groundX);
+  assert.ok(visual.shadowCoreSprite.y > visual.metrics.shadow.groundY);
   assertClose(visual.shadowCoreSprite.width, visual.metrics.shadow.width);
   assertClose(visual.shadowCoreSprite.height, visual.metrics.shadow.height);
   assert.ok(visual.shadowPenumbraSprite.width > visual.shadowCoreSprite.width);
   assert.ok(visual.shadowCoreSprite.alpha > visual.shadowPenumbraSprite.alpha);
-  assert.equal(
-    [...visual.standGraphics.commands, ...visual.standSpecularGraphics.commands]
-      .some(command => command[0] === "drawCircle"),
-    false
-  );
   visual.destroy();
 });
 
@@ -457,18 +420,17 @@ test("refreshes both projected silhouettes when Foundry replaces the Token textu
   visual.destroy();
 });
 
-test("keeps the Token grounded when every support effect is fully transparent", () => {
+test("keeps airborne lift active when the optional shadow is fully transparent", () => {
   const token = makeToken(60);
   const visual = new FlyingTokenVisual(token, {
     ...settings,
-    standOpacity: 0,
-    shadowOpacity: 0,
-    projectionOpacity: 0
+    shadowOpacity: 0
   });
 
   assert.equal(visual.container.visible, false);
-  assert.deepEqual([token.mesh.x, token.mesh.y], [token.center.x, token.center.y]);
-  assert.deepEqual([token.tooltip.x, token.tooltip.y], [50, -4]);
+  assert.equal(token.mesh.x, token.center.x);
+  assert.ok(token.mesh.y < token.center.y);
+  assert.ok(token.tooltip.y < -4);
   visual.destroy();
 });
 
@@ -476,10 +438,7 @@ test("ambient motion updates only the cached pose and never rebuilds PIXI geomet
   const token = makeToken(60);
   token.id = "ambient-token";
   const visual = new FlyingTokenVisual(token, settings);
-  const bodyCommands = visual.standGraphics.commands;
-  const specularCommands = visual.standSpecularGraphics.commands;
   const shadowCommands = visual.shadowGraphics.commands;
-  const projectionCommands = visual.projectionGraphics.commands;
   const staticMeshY = token.mesh.y;
   const scaleWrites = token.mesh.scale.setCalls;
   const alphaWrites = token.mesh.alphaWrites;
@@ -493,17 +452,17 @@ test("ambient motion updates only the cached pose and never rebuilds PIXI geomet
     shadowAlphas.push(visual.shadowCoreSprite.alpha);
   }
 
-  assert.strictEqual(visual.standGraphics.commands, bodyCommands);
-  assert.strictEqual(visual.standSpecularGraphics.commands, specularCommands);
   assert.strictEqual(visual.shadowGraphics.commands, shadowCommands);
-  assert.strictEqual(visual.projectionGraphics.commands, projectionCommands);
   assert.equal(token.mesh.scale.setCalls, scaleWrites);
   assert.equal(token.mesh.alphaWrites, alphaWrites);
   assert.ok(token.mesh.position.setCalls > positionWrites);
   assert.ok(Math.abs(token.mesh.y - staticMeshY) <= visual.metrics.token.bobAmplitude + 1e-9);
   assert.ok(Math.abs(token.mesh.y - staticMeshY) > 1e-6);
-  assertClose(visual.shadowCoreSprite.x, visual.metrics.base.x);
-  assertClose(visual.shadowCoreSprite.y, visual.metrics.base.y);
+  assertClose(visual.shadowCoreSprite.x, visual.metrics.shadow.x);
+  assert.ok(
+    Math.abs(visual.shadowCoreSprite.y - visual.metrics.shadow.y)
+      <= (visual.metrics.token.bobAmplitude * 0.18) + 1e-9
+  );
   assert.ok(new Set(shadowWidths).size > 1, "ground shadow scale should follow airborne bob");
   assert.ok(new Set(shadowAlphas).size > 1, "ground shadow density should follow airborne bob");
   visual.destroy();
@@ -523,23 +482,6 @@ test("reduced-motion keeps the static airborne treatment without a ticker requir
   } finally {
     globalThis.matchMedia = previousMatchMedia;
   }
-});
-
-test("draws Foundry's footprint shape more clearly while hovered or controlled", () => {
-  const token = makeToken(60);
-  const visual = new FlyingTokenVisual(token, settings);
-  const normalLineAlphas = visual.projectionGraphics.commands
-    .filter(command => command[0] === "lineStyle")
-    .map(command => Number(command[3]) || 0);
-  assert.ok(visual.projectionGraphics.commands.some(command => command[0] === "drawShape"));
-
-  token.controlled = true;
-  visual.onRefresh({ refreshState: true });
-  const emphasizedLineAlphas = visual.projectionGraphics.commands
-    .filter(command => command[0] === "lineStyle")
-    .map(command => Number(command[3]) || 0);
-  assert.ok(Math.max(...emphasizedLineAlphas) > Math.max(...normalLineAlphas));
-  visual.destroy();
 });
 
 test("does not double the lift when core refreshes position and elevation together", () => {
@@ -647,17 +589,11 @@ test("uses one shared low-frequency ticker for fifty already-flying Tokens", () 
   assert.equal(ticker.callbacks.size, 1);
   assert.equal(readyCanvas.primary.children.length, 50);
   const commandReferences = readyCanvas.primary.children.map(container => ({
-    shadow: container.children[0].commands,
-    projection: container.children[1].commands,
-    body: container.children[2].commands,
-    specular: container.children[3].commands
+    shadow: container.children[0].commands
   }));
   for (const callback of ticker.callbacks) callback();
   readyCanvas.primary.children.forEach((container, index) => {
     assert.strictEqual(container.children[0].commands, commandReferences[index].shadow);
-    assert.strictEqual(container.children[1].commands, commandReferences[index].projection);
-    assert.strictEqual(container.children[2].commands, commandReferences[index].body);
-    assert.strictEqual(container.children[3].commands, commandReferences[index].specular);
   });
 
   layer.deactivate(readyCanvas);
@@ -865,8 +801,8 @@ test("respects an immediate elevation update when animation is disabled", () => 
   assert.equal(ticker.callbacks.size, 1);
   assert.equal(token.children.length, 0);
   assert.equal(readyCanvas.primary.children.length, 1);
-  const stand = readyCanvas.primary.children[0].children[2];
-  assert.ok(stand.commands.some(command => command[0] === "drawEllipse"));
+  const shadow = readyCanvas.primary.children[0].children[2];
+  assert.equal(shadow.visible, true);
   layer.deactivate(readyCanvas);
 });
 
@@ -1005,14 +941,8 @@ function installGameSettings(overrides = {}) {
   const values = {
     enabled: true,
     enableAltitudeHud: true,
-    enableGroundProjection: true,
-    enableHeightAxis: true,
-    enableStand: true,
     enableShadow: true,
-    standOpacity: 0.4,
     shadowOpacity: 0.35,
-    projectionOpacity: 0.42,
-    shadowDistanceMultiplier: 1,
     ...overrides
   };
   globalThis.game = { settings: { get: (_moduleId, key) => values[key] } };

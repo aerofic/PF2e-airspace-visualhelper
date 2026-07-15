@@ -60,7 +60,7 @@ test("preserves the scattered base and adds a selectable lifted-art area", () =>
   assert.equal(adapter.state.supported, true);
   assert.deepEqual([adapter.state.offsetX, adapter.state.offsetY], [15, -8]);
   assert.deepEqual(adapter.state.bases.mesh, { x: 265, y: 342 });
-  assert.equal(token.hitArea.contains(20, 0), true, "scattered acrylic base should stay selectable");
+  assert.equal(token.hitArea.contains(20, 0), true, "scattered Token base should stay selectable");
   assert.equal(token.hitArea.contains(0, -45), true, "visibly lifted Token art should also be selectable");
   assert.equal(token.hitArea.contains(500, 500), false);
 

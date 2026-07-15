@@ -3,14 +3,21 @@ import { normalizeHudElevation } from "./visual-math.js";
 
 export const AIRSPACE_VIEW_WIDTH = 318;
 export const AIRSPACE_VIEW_HEIGHT = 348;
+export const AIRSPACE_ZOOM_MIN = 0.55;
+export const AIRSPACE_ZOOM_MAX = 2.4;
+export const AIRSPACE_PITCH_MIN = Math.PI / 10;
+export const AIRSPACE_PITCH_MAX = (Math.PI * 2) / 5;
+export const DEFAULT_AIRSPACE_CAMERA = Object.freeze({
+  yaw: Math.PI / 4,
+  pitch: Math.PI / 6,
+  zoom: 1
+});
 
-const GROUND_CENTER_X = AIRSPACE_VIEW_WIDTH / 2;
 const GROUND_CENTER_Y = 272;
-const GROUND_RADIUS_X = 128;
-const GROUND_RADIUS_Y = 58;
-const MAX_VERTICAL_PIXELS = 188;
+const GROUND_RADIUS_X = 230;
+const MAX_VERTICAL_PIXELS = 360;
 
-/** Stable, non-mutating back-to-front sort for the fixed isometric camera. */
+/** Stable, non-mutating back-to-front sort for the current orbit camera. */
 export function sortAirspaceEntries(entries) {
   return [...entries].sort((left, right) => {
     const depth = finiteOr(left.groundY, 0) - finiteOr(right.groundY, 0);
@@ -47,7 +54,7 @@ export function collectEntriesWithinRadius(entries, selected, {
 }
 
 /**
- * Project actual relative X/Y and elevation into one fixed isometric airspace.
+ * Project actual relative X/Y and elevation into an orbitable local airspace.
  * Horizontal geometry is linear inside the selected radius; vertical geometry
  * is also linear within the current view and retains exact labels.
  */
@@ -56,39 +63,59 @@ export function buildAirspaceView(entries, {
   radiusSpaces = 8,
   gridDistance = 5,
   width = AIRSPACE_VIEW_WIDTH,
-  height = AIRSPACE_VIEW_HEIGHT
+  height = AIRSPACE_VIEW_HEIGHT,
+  camera = DEFAULT_AIRSPACE_CAMERA
 } = {}) {
   const safeRadius = positiveOr(radiusSpaces, 8);
   const safeGridDistance = positiveOr(gridDistance, 5);
   const safeWidth = positiveOr(width, AIRSPACE_VIEW_WIDTH);
   const safeHeight = positiveOr(height, AIRSPACE_VIEW_HEIGHT);
+  const safeCamera = normalizeAirspaceCamera(camera);
   const centerX = safeWidth / 2;
-  const groundCenterY = safeHeight - (AIRSPACE_VIEW_HEIGHT - GROUND_CENTER_Y);
-  const groundRadiusX = Math.min(GROUND_RADIUS_X, (safeWidth - 38) / 2);
-  const groundRadiusY = Math.min(GROUND_RADIUS_Y, (safeHeight - 60) / 3);
+  const baseGroundRadiusX = Math.min(GROUND_RADIUS_X, (safeWidth - 38) / 2);
+  const pitchDepth = Math.sin(safeCamera.pitch);
+  const baseGroundRadiusY = baseGroundRadiusX * pitchDepth;
+  const defaultGroundDepth = baseGroundRadiusX * Math.sin(DEFAULT_AIRSPACE_CAMERA.pitch);
+  const groundCenterY = Math.min(
+    safeHeight - (AIRSPACE_VIEW_HEIGHT - GROUND_CENTER_Y),
+    safeHeight - defaultGroundDepth - 12
+  );
+  const groundRadiusX = baseGroundRadiusX * safeCamera.zoom;
+  const groundRadiusY = baseGroundRadiusY * safeCamera.zoom;
   const elevations = entries.map(entry => normalizeHudElevation(entry.elevation));
   const minimumElevation = Math.min(0, ...elevations);
   const maximumElevation = Math.max(0, ...elevations);
   const positiveSpan = Math.max(0, maximumElevation);
   const negativeSpan = Math.max(0, -minimumElevation);
-  const verticalBudget = Math.min(MAX_VERTICAL_PIXELS, safeHeight - 116);
+  const verticalBudget = Math.min(MAX_VERTICAL_PIXELS, groundCenterY - 48);
   const belowBudget = Math.min(46, verticalBudget * 0.24);
   const aboveBudget = verticalBudget - (negativeSpan > 0 ? belowBudget : 0);
-  const nominalVerticalScale = (groundRadiusX / (safeRadius * safeGridDistance)) * 0.9;
-  const verticalScale = calculateVerticalScale({
+  const nominalVerticalScale = (baseGroundRadiusX / (safeRadius * safeGridDistance))
+    * Math.cos(safeCamera.pitch);
+  const fittedVerticalScale = calculateVerticalScale({
     positiveSpan,
     negativeSpan,
     aboveBudget,
     belowBudget,
     nominal: nominalVerticalScale
   });
+  const verticalScale = fittedVerticalScale * safeCamera.zoom;
+
+  const projectGround = (dx, dy) => projectGroundPoint(dx, dy, {
+    centerX,
+    groundCenterY,
+    radiusSpaces: safeRadius,
+    radiusX: baseGroundRadiusX,
+    camera: safeCamera
+  });
 
   const nodes = entries.map(entry => {
     const elevation = normalizeHudElevation(entry.elevation);
     const dx = finiteOr(entry.dxSpaces, 0);
     const dy = finiteOr(entry.dySpaces, 0);
-    const groundX = centerX + (((dx - dy) / (safeRadius * Math.SQRT2)) * groundRadiusX);
-    const groundY = groundCenterY + (((dx + dy) / (safeRadius * Math.SQRT2)) * groundRadiusY);
+    const groundPoint = projectGround(dx, dy);
+    const groundX = groundPoint.x;
+    const groundY = groundPoint.y;
     const tokenX = groundX;
     const tokenY = groundY - (elevation * verticalScale);
     const verticalLength = Math.abs(tokenY - groundY);
@@ -113,10 +140,11 @@ export function buildAirspaceView(entries, {
     groundCenterY,
     groundRadiusX,
     groundRadiusY,
+    camera: safeCamera,
     minimumElevation,
     maximumElevation,
     verticalScale,
-    gridLines: buildGroundGrid({ centerX, groundCenterY, groundRadiusX, groundRadiusY }),
+    gridLines: buildGroundGrid({ radiusSpaces: safeRadius, projectGround }),
     altitudeTicks: buildAltitudeTicks({
       minimumElevation,
       maximumElevation,
@@ -124,6 +152,19 @@ export function buildAirspaceView(entries, {
       groundCenterY
     }),
     nodes: sortAirspaceEntries(nodes)
+  };
+}
+
+/** Clamp camera state so pointer and wheel input can never create invalid CSS. */
+export function normalizeAirspaceCamera(camera = {}) {
+  return {
+    yaw: normalizeRadians(finiteOr(camera.yaw, DEFAULT_AIRSPACE_CAMERA.yaw)),
+    pitch: clamp(
+      finiteOr(camera.pitch, DEFAULT_AIRSPACE_CAMERA.pitch),
+      AIRSPACE_PITCH_MIN,
+      AIRSPACE_PITCH_MAX
+    ),
+    zoom: clamp(finiteOr(camera.zoom, DEFAULT_AIRSPACE_CAMERA.zoom), AIRSPACE_ZOOM_MIN, AIRSPACE_ZOOM_MAX)
   };
 }
 
@@ -145,23 +186,46 @@ function calculateVerticalScale({ positiveSpan, negativeSpan, aboveBudget, below
   return Number.isFinite(scale) && scale > 0 ? scale : 1;
 }
 
-function buildGroundGrid({ centerX, groundCenterY, groundRadiusX, groundRadiusY }) {
+function buildGroundGrid({ radiusSpaces, projectGround }) {
   const lines = [];
   for (const fraction of [-1, -0.5, 0, 0.5, 1]) {
+    const offset = fraction * radiusSpaces;
+    const xStart = projectGround(offset, -radiusSpaces);
+    const xEnd = projectGround(offset, radiusSpaces);
+    const yStart = projectGround(-radiusSpaces, offset);
+    const yEnd = projectGround(radiusSpaces, offset);
     lines.push({
-      x1: centerX + ((fraction - -1) * groundRadiusX * 0.5),
-      y1: groundCenterY + ((fraction + -1) * groundRadiusY * 0.5),
-      x2: centerX + ((fraction - 1) * groundRadiusX * 0.5),
-      y2: groundCenterY + ((fraction + 1) * groundRadiusY * 0.5)
+      x1: xStart.x,
+      y1: xStart.y,
+      x2: xEnd.x,
+      y2: xEnd.y
     });
     lines.push({
-      x1: centerX + ((-1 - fraction) * groundRadiusX * 0.5),
-      y1: groundCenterY + ((-1 + fraction) * groundRadiusY * 0.5),
-      x2: centerX + ((1 - fraction) * groundRadiusX * 0.5),
-      y2: groundCenterY + ((1 + fraction) * groundRadiusY * 0.5)
+      x1: yStart.x,
+      y1: yStart.y,
+      x2: yEnd.x,
+      y2: yEnd.y
     });
   }
   return lines;
+}
+
+function projectGroundPoint(dx, dy, {
+  centerX,
+  groundCenterY,
+  radiusSpaces,
+  radiusX,
+  camera
+}) {
+  const cosYaw = Math.cos(camera.yaw);
+  const sinYaw = Math.sin(camera.yaw);
+  const rotatedX = (dx * cosYaw) - (dy * sinYaw);
+  const rotatedY = (dx * sinYaw) + (dy * cosYaw);
+  const horizontalScale = (radiusX / radiusSpaces) * camera.zoom;
+  return {
+    x: centerX + (rotatedX * horizontalScale),
+    y: groundCenterY + (rotatedY * horizontalScale * Math.sin(camera.pitch))
+  };
 }
 
 function buildAltitudeTicks({ minimumElevation, maximumElevation, verticalScale, groundCenterY }) {
@@ -191,4 +255,13 @@ function positiveOr(value, fallback) {
 function finiteOr(value, fallback) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function normalizeRadians(value) {
+  const tau = Math.PI * 2;
+  return ((value % tau) + tau) % tau;
 }

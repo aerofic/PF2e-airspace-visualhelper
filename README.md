@@ -1,72 +1,54 @@
-# PF2e Flying Visual Helper 0.6.0
+# PF2e Flying Visual Helper
 
-面向 Foundry VTT v14 与 PF2e 8.x 的纯客户端飞行视觉和局部 3D 空域辅助模块。它不制作真正 3D 地图，也不修改 PF2e 规则、TokenDocument 坐标、移动、攻击或距离计算。
+面向 Foundry VTT v14 与 PF2e 8.x 的纯客户端飞行视觉和局部 3D 空域辅助模块。
 
-## 0.6.0 核心体验
+模块不制作真正的 3D 地图，也不修改 Actor、Item、Rules Element、Combat、TokenDocument 坐标、移动、攻击或距离计算。
 
-- 地图上的飞行 Token 只做同格内几像素的轻微浮空和异步摇摆，不会视觉占据邻格。
-- 地面阴影直接留在 Token 原始格位，使用 Token 当前纹理的透明轮廓绘制本影与半影；阴影尺寸受原 Token 占地约束，不向邻格远距离投射。
-- 阴影跟随空中摇摆同步改变少量尺寸和密度，但阴影中心不离开 TokenDocument 的真实地面位置。
-- 透明亚克力底盘、落点环和地面阴影均不参与点击；选择、Target、拖动与网格吸附仍操作原生 Token。
-- Foundry/PF2e 原生 elevation 数字保持原生文字、单位、位置逻辑和样式，只叠加与飞行模型相同的视觉位移，使其始终位于模型上方。
+## 地图飞行视觉
 
-## 局部 3D 空域展开图
+- 读取标准 `TokenDocument.elevation`，只对 elevation > 0 的 Token 启用视觉效果。
+- 不再绘制亚克力底座、支架、连接件或落点环。
+- Token 模型每升高 10 ft，上移其自身占地高度的 5%；60 ft 时达到 30% 上限，更高高度不继续增加屏幕位移。
+- 强烈的地面阴影以 Token 的真实原始占地为起点，复用当前 Token 纹理的透明轮廓并始终保持非交互。
+- 阴影随高度最多向下漂移 Token 高度的约 4.5%；空中摇摆只叠加不足摇摆幅度 20% 的中心位移，并同步少量浓淡和尺寸变化。
+- Foundry/PF2e 原生高度数字保持原生文字、单位和布局逻辑，只叠加与模型相同的视觉位移，始终跟随模型。
+- Token 选择、Target、拖动、网格吸附、视野和规则位置仍由原始 Token 处理。
 
-Token 控制栏提供一个侧边空域按钮，这是面板的唯一打开入口；没有打开快捷键，也不会在载入世界或切换场景后自动弹出。
+## 可旋转 3D 空域悬浮框
 
-打开前先选择一个 Token。面板以它为中心，将附近可见 Token 的真实 Canvas X/Y 相对位置和 `TokenDocument.elevation` 投影到固定等距 3D 战术视图中：
+Token 控制栏提供空域按钮，面板只在点击后打开，切换场景时自动关闭，没有打开快捷键。
 
-- 半透明透视地面网格表达水平相对位置。
-- 地面落点、垂直引线和 Token 缩略图共同表达 X/Y/Z 关系。
-- 同一视图内 elevation 使用统一线性比例，并保留精确高度标签。
-- “附近范围”滑杆可在 1–30 格之间实时调整视觉查询半径。
-- 点击 Token 缩略图，在权限允许时选择对应地图 Token，并移动镜头和本地 Ping。
-- 每个缩略图的独立准星按钮切换 Foundry 原生本地 Target，不绕过可见性或控制权限。
-- 悬停显示名称、Elevation 和 PF2e 最终派生 Fly Speed；无飞行速度或无 Actor `OBSERVER` 权限时隐藏 Fly Speed。
+- 首次打开时根据可见 Token 数量和浏览器可用区域自动计算尺寸，小规模战斗保持紧凑，单位较多时优先扩大三维画布。
+- 标题栏可拖动整个高透明悬浮框。
+- 在三维画布空白处按住鼠标拖动可水平环绕并调整俯角；鼠标滚轮缩放；重置按钮恢复默认镜头。
+- “附近范围”滑杆可在 1–30 格之间实时调整局部查询范围。
+- 以当前选中 Token 为中心，将附近可见 Token 的真实相对 X/Y 与精确 elevation 投影到同一三维坐标系。
+- 点击缩略 Token 可在权限允许时选择地图 Token，并移动镜头和本地 Ping。
+- 独立准星按钮调用 Foundry 原生本地 `Token#setTarget`，不会写入世界数据。
+- 悬停信息显示名称、Elevation，以及用户具备 Actor `OBSERVER` 权限时的 PF2e Fly Speed。
 
-“附近”只使用 Canvas 像素位置筛选面板内容，不调用 PF2e/Foundry 规则距离 API，也不代表攻击、移动或效果范围。
-
-## 地图视觉
-
-- 读取标准 `TokenDocument.elevation`；只有 elevation > 0 时启用飞行视觉。
-- 同心透明飞行底盘锚定 Foundry 计算的真实 Token footprint，包括非矩形和多格 Token。
-- 严格俯视模式不绘制跨格的侧视长支架；仅显示底盘折射边缘、支撑端面、落点环和原格位阴影。
-- 连续高度曲线驱动不超过约 6 px 的视觉微位移、轻微缩放与透明度变化。
-- 所有飞行 Token 共用一个按需低频 ticker；摇摆只更新缓存的 Mesh、原生 UI 和阴影 Sprite 姿态，不逐帧重建 PIXI Graphics。
-- 系统或浏览器请求减少动态效果时自动停用摇摆，并恢复静态浮空姿态。
+“附近范围”只筛选面板内容，不代表攻击、移动、效果或规则距离。
 
 ## Z Scatter 兼容
 
-检测到可选模块 Z Scatter 2.2.4 时，本模块把散布位移、浮空位移、原生高度数字和扩展命中区域组合到同一 Token 上。点击 Z Scatter、拖动和移动动画期间会暂时让出并重新取得受管几何，避免标签落回底座或出现双重位移。
+检测到可选模块 Z Scatter 2.2.4 时，本模块组合其视觉散布、浮空位移、原生高度数字和扩展命中区域。地面阴影仍以 TokenDocument 的真实规则格位为基准，不跟随 Z Scatter 的屏幕散布。
 
-兼容层不读取 Z Scatter 私有状态，不修改其设置、flag 或碰撞算法。地面位置、空中图像命中区和 3D 空域图中的条目最终都指向同一个 TokenDocument。
+兼容层不读取 Z Scatter 私有状态，也不修改其设置、flag 或碰撞算法。
 
 ## 设置
 
-所有设置均为客户端范围：
+公开设置均为客户端范围：
 
 - Enable Flying Visual Helper
 - Enable 3D Airspace Explorer
-- Enable Ground Projection
-- Enable Top-Down Acrylic Base
 - Enable Ground Shadow
-- Stand Opacity
 - Shadow Opacity
-- Projection Opacity
 
-0.5.x 的 Height Axis 和 Shadow Distance Multiplier 键会隐藏保留，以便安全降级，但不再控制 0.6.0 的空域图或居中阴影。
-
-## 隐私和规则边界
-
-- 面板只读取当前用户可见且非 Secret 的 `canvas.tokens.placeables`。
-- PF2e Fly Speed 只对具有 Actor `OBSERVER` 权限的用户显示。
-- 点击无所有权 Token 不会强制取得控制权；仍可移动镜头和本地 Ping。
-- Target 使用 Foundry 原生本地 `Token#setTarget`，不写 Actor、Item、Combat 或规则数据。
-- 模块没有 socket、数据库写入、规则判断或距离测量。
+旧版本的底座、支架、落点环、高度轴和阴影距离设置键会隐藏保留，便于安全降级，但不再参与当前渲染。
 
 ## 安装
 
-将整个 `pf2e-flying-visual-helper` 目录放入 Foundry 用户数据目录的 `Data/modules/`，重启 Foundry，在 PF2e 世界的“管理模块”中启用。
+将整个 `pf2e-flying-visual-helper` 目录放入 Foundry 用户数据目录的 `Data/modules/`，重启 Foundry，然后在 PF2e 世界中启用模块。
 
 ## 结构
 
@@ -75,9 +57,7 @@ src/
   airspace-explorer.js
   airspace-view.js
   airspace-lifecycle.js
-  flying-stand.js
   shadow-renderer.js
-  projection-renderer.js
   token-lift-renderer.js
   z-scatter-compatibility.js
   flying-token-visual.js
@@ -97,4 +77,4 @@ templates/
 npm test
 ```
 
-自动测试覆盖 3D X/Y/Z 投影、实时半径过滤、侧边按钮打开与场景关闭生命周期、选择与 Target 分离、隐私权限、居中纹理阴影、摇摆同步、原生高度标签、Z Scatter、动画、极端有限输入及共享 ticker 性能。
+自动测试覆盖 3D X/Y/Z 投影、镜头旋转与缩放、自动尺寸、实时范围过滤、选择与 Target、隐私权限、强阴影及其受限漂移、精确高度位移、摇摆同步、原生高度标签、Z Scatter、动画、极端输入和共享 ticker 性能。

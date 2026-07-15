@@ -8,7 +8,7 @@ class FakeApplicationV2 {
     this.renderCalls = [];
     this.positionCalls = [];
     this.closeCalls = [];
-    this.position = { width: 340, height: 486, left: 64, top: 72 };
+    this.position = { width: 520, height: 600, left: 64, top: 72 };
   }
 
   render(options = {}) {
@@ -17,6 +17,7 @@ class FakeApplicationV2 {
   }
 
   setPosition(position = {}) {
+    if (!this.rendered) throw new Error("Window element has not been rendered");
     this.positionCalls.push({ ...position });
     this.position = { ...this.position, ...position };
     return position;
@@ -62,25 +63,29 @@ globalThis.CONFIG = {
 const {
   AIRSPACE_EXPLORER_POSITION,
   AirspaceExplorer,
+  calculateAirspaceExplorerPosition,
   extractFlySpeed,
   isAirspaceTokenVisible,
-  normalizeAirspaceRadius
+  normalizeAirspaceRadius,
+  orbitAirspaceCamera,
+  zoomAirspaceCamera
 } = await import("../src/airspace-explorer.js");
 
-test("uses a fixed frameless side panel and registers no keyboard shortcut", () => {
+test("uses a native movable ApplicationV2 window and registers no keyboard shortcut", () => {
   assert.deepEqual(AIRSPACE_EXPLORER_POSITION, {
-    width: 340,
-    height: 486,
+    width: 520,
+    height: 600,
     left: 64,
     top: 72
   });
   assert.deepEqual(AirspaceExplorer.DEFAULT_OPTIONS.position, AIRSPACE_EXPLORER_POSITION);
-  assert.equal(AirspaceExplorer.DEFAULT_OPTIONS.window.frame, false);
-  assert.equal(AirspaceExplorer.DEFAULT_OPTIONS.window.resizable, false);
+  assert.equal(AirspaceExplorer.DEFAULT_OPTIONS.window.frame, true);
+  assert.equal(AirspaceExplorer.DEFAULT_OPTIONS.window.positioned, true);
+  assert.equal(AirspaceExplorer.DEFAULT_OPTIONS.window.resizable, true);
   assert.equal("keybindings" in AirspaceExplorer.DEFAULT_OPTIONS, false);
   assert.deepEqual(
     Object.keys(AirspaceExplorer.DEFAULT_OPTIONS.actions).sort(),
-    ["closeAirspace", "selectToken", "targetToken"]
+    ["resetCamera", "selectToken", "targetToken"]
   );
 });
 
@@ -93,7 +98,11 @@ test("opens only when toggle is explicitly invoked and defaults to eight spaces"
 
   explorer.rendered = false;
   await explorer.toggle();
-  assert.equal(explorer.renderCalls.at(-1)?.force, true);
+  const renderOptions = explorer.renderCalls.at(-1);
+  assert.equal(renderOptions?.force, true);
+  assert.ok(renderOptions?.position.width >= 460);
+  assert.ok(renderOptions?.position.height >= 540);
+  assert.equal(explorer.positionCalls.length, 0);
 });
 
 test("builds a real XYZ view around the controlled Token", async () => {
@@ -120,23 +129,63 @@ test("clamps the live query radius to the supported visual range", () => {
   assert.equal(normalizeAirspaceRadius(Number.NaN), 8);
 });
 
-test("templates expose a range slider, separate selection, and native Target toggle", () => {
+test("templates expose range, orbit camera, selection, and native Target controls", () => {
   const controls = readFileSync(new URL("../templates/airspace-controls.hbs", import.meta.url), "utf8");
   const view = readFileSync(new URL("../templates/airspace-view.hbs", import.meta.url), "utf8");
   assert.match(controls, /type="range"/);
   assert.match(controls, /data-airspace-radius/);
+  assert.match(controls, /data-action="resetCamera"/);
+  assert.match(view, /data-airspace-camera/);
   assert.match(view, /data-action="selectToken"/);
   assert.match(view, /data-action="targetToken"/);
   assert.match(view, /class="airspace-grid"/);
   assert.match(view, /class="airspace-height-line/);
 });
 
-test("CSS keeps the translucent tactical view compact", () => {
+test("CSS keeps the floating tactical view highly transparent and orbitable", () => {
   const css = readFileSync(new URL("../styles/module.css", import.meta.url), "utf8");
   const rootRule = css.match(/\.pf2e-flying-visual-helper\.airspace-explorer\s*{([^}]+)}/)?.[1] ?? "";
-  assert.match(rootRule, /background:\s*rgb\(3 8 12 \/ 0\.18\)/);
+  assert.match(rootRule, /background:\s*rgb\(3 8 12 \/ 0\.06\)/);
+  assert.match(rootRule, /position:\s*absolute/);
+  assert.match(css, /\.airspace-explorer \.window-header/);
+  assert.match(css, /\.airspace-explorer \.window-content/);
   assert.match(css, /\.airspace-explorer \.airspace-stage/);
-  assert.match(css, /width:\s*30px/);
+  assert.match(rootRule, /--airspace-token-art-size:\s*36px/);
+  assert.match(rootRule, /--airspace-token-node-width:\s*56px/);
+  assert.match(css, /cursor:\s*grab/);
+  assert.match(css, /touch-action:\s*none/);
+});
+
+test("opening size grows with visible density and stays inside the viewport", () => {
+  const small = calculateAirspaceExplorerPosition({
+    viewportWidth: 1600,
+    viewportHeight: 1000,
+    entryCount: 1
+  });
+  const crowded = calculateAirspaceExplorerPosition({
+    viewportWidth: 1600,
+    viewportHeight: 1000,
+    entryCount: 20
+  });
+  const constrained = calculateAirspaceExplorerPosition({
+    viewportWidth: 700,
+    viewportHeight: 600,
+    entryCount: 20
+  });
+  assert.ok(crowded.width > small.width);
+  assert.ok(crowded.height > small.height);
+  assert.ok(constrained.width <= 604);
+  assert.ok(constrained.height <= 488);
+});
+
+test("mouse orbit changes yaw and pitch while wheel zoom remains bounded", () => {
+  const start = { yaw: Math.PI / 4, pitch: Math.PI / 6, zoom: 1 };
+  const orbited = orbitAirspaceCamera(start, { deltaX: 30, deltaY: -20 });
+  assert.notEqual(orbited.yaw, start.yaw);
+  assert.ok(orbited.pitch > start.pitch);
+  assert.ok(zoomAirspaceCamera(start, -120).zoom > 1);
+  assert.equal(zoomAirspaceCamera(start, -100_000).zoom, 2.4);
+  assert.equal(zoomAirspaceCamera(start, 100_000).zoom, 0.55);
 });
 
 test("reads PF2e Fly Speed only with observer permission", () => {

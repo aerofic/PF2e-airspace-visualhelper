@@ -24,7 +24,7 @@ test("filters the local airspace by real Canvas radius without changing entries"
   assert.equal("distanceSpaces" in entries[1], false, "source rows remain immutable");
 });
 
-test("projects actual X, Y, and elevation into a fixed isometric view", () => {
+test("projects actual X, Y, and elevation into the default orbit view", () => {
   const entries = collectEntriesWithinRadius([
     selected,
     { id: "east", name: "East", elevation: 20, centerX: 200, centerY: 0 },
@@ -48,6 +48,31 @@ test("projects actual X, Y, and elevation into a fixed isometric view", () => {
   assert.ok(at("south").groundX < at("anchor").groundX);
   assert.ok(at("east").groundY > at("anchor").groundY);
   assert.ok(at("south").groundY > at("anchor").groundY);
+});
+
+test("camera yaw, pitch, and zoom change the real XYZ projection", () => {
+  const entries = [
+    { ...selected, dxSpaces: 0, dySpaces: 0, distanceSpaces: 0 },
+    { id: "east", elevation: 20, dxSpaces: 4, dySpaces: 0, distanceSpaces: 4 }
+  ];
+  const defaultView = buildAirspaceView(entries, { selectedId: selected.id });
+  const rotated = buildAirspaceView(entries, {
+    selectedId: selected.id,
+    camera: { yaw: Math.PI * 0.75, pitch: Math.PI / 3, zoom: 1 }
+  });
+  const zoomed = buildAirspaceView(entries, {
+    selectedId: selected.id,
+    camera: { yaw: Math.PI / 4, pitch: Math.PI / 6, zoom: 2 }
+  });
+  const at = (view, id) => view.nodes.find(node => node.id === id);
+  const defaultDelta = at(defaultView, "east").groundX - defaultView.centerX;
+  const rotatedDelta = at(rotated, "east").groundX - rotated.centerX;
+  const zoomedDelta = at(zoomed, "east").groundX - zoomed.centerX;
+  assert.ok(defaultDelta > 0);
+  assert.ok(rotatedDelta < 0);
+  assert.equal(rotated.groundCenterY, defaultView.groundCenterY, "orbit pivot must stay fixed");
+  assert.ok(Math.abs(zoomedDelta) > Math.abs(defaultDelta) * 1.9);
+  assert.ok(zoomed.verticalScale > defaultView.verticalScale);
 });
 
 test("keeps selected Token centered and responds continuously to range changes", () => {

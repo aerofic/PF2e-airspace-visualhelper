@@ -6,8 +6,9 @@ const I18N_PREFIX = "PF2E_FLYING_VISUAL_HELPER.Settings";
 export function registerSettings(onChange) {
   registerBoolean(SETTINGS.ENABLED, onChange);
   registerBoolean(SETTINGS.ENABLE_ALTITUDE_HUD, onChange);
-  registerBoolean(SETTINGS.ENABLE_GROUND_PROJECTION, onChange);
-  // Retain the old 0.5.x client key without exposing a dead preference.
+  // Retain removed 0.5/0.6 keys without exposing dead acrylic controls. This
+  // also preserves a clean downgrade path for existing client settings.
+  registerBoolean(SETTINGS.ENABLE_GROUND_PROJECTION, onChange, { config: false });
   registerBoolean(SETTINGS.ENABLE_HEIGHT_AXIS, onChange, { config: false });
   registerRange(
     SETTINGS.AIRSPACE_RADIUS,
@@ -16,12 +17,21 @@ export function registerSettings(onChange) {
     { config: false }
   );
 
-  // Preserve the V1 stand/shadow controls while adding V2 features.
-  registerBoolean(SETTINGS.ENABLE_STAND, onChange);
+  registerBoolean(SETTINGS.ENABLE_STAND, onChange, { config: false });
   registerBoolean(SETTINGS.ENABLE_SHADOW, onChange);
-  registerRange(SETTINGS.STAND_OPACITY, { min: 0, max: 1, step: 0.05 }, onChange);
+  registerRange(
+    SETTINGS.STAND_OPACITY,
+    { min: 0, max: 1, step: 0.05 },
+    onChange,
+    { config: false }
+  );
   registerRange(SETTINGS.SHADOW_OPACITY, { min: 0, max: 1, step: 0.05 }, onChange);
-  registerRange(SETTINGS.PROJECTION_OPACITY, { min: 0, max: 1, step: 0.05 }, onChange);
+  registerRange(
+    SETTINGS.PROJECTION_OPACITY,
+    { min: 0, max: 1, step: 0.05 },
+    onChange,
+    { config: false }
+  );
   // Retain the 0.5.x client key for downgrade safety; centered 0.6 shadows no
   // longer expose a directional-distance control.
   registerRange(
@@ -37,13 +47,9 @@ export function readSettings() {
   return {
     enabled: game.settings.get(MODULE_ID, SETTINGS.ENABLED),
     enableAltitudeHud: game.settings.get(MODULE_ID, SETTINGS.ENABLE_ALTITUDE_HUD),
-    enableGroundProjection: game.settings.get(MODULE_ID, SETTINGS.ENABLE_GROUND_PROJECTION),
     airspaceRadius: game.settings.get(MODULE_ID, SETTINGS.AIRSPACE_RADIUS),
-    enableStand: game.settings.get(MODULE_ID, SETTINGS.ENABLE_STAND),
     enableShadow: game.settings.get(MODULE_ID, SETTINGS.ENABLE_SHADOW),
-    standOpacity: game.settings.get(MODULE_ID, SETTINGS.STAND_OPACITY),
-    shadowOpacity: game.settings.get(MODULE_ID, SETTINGS.SHADOW_OPACITY),
-    projectionOpacity: game.settings.get(MODULE_ID, SETTINGS.PROJECTION_OPACITY)
+    shadowOpacity: game.settings.get(MODULE_ID, SETTINGS.SHADOW_OPACITY)
   };
 }
 

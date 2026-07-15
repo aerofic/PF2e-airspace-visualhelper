@@ -10,7 +10,7 @@
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableStand.name": "Enable Top-Down Acrylic Base",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableStand.hint": "Render a concentric transparent flight-plate rim, refractive highlights, and the camera-aligned support point.",
   "PF2E_FLYING_VISUAL_HELPER.Settings.enableShadow.name": "Enable Ground Shadow",
-  "PF2E_FLYING_VISUAL_HELPER.Settings.enableShadow.hint": "Render the Token texture as a strong, footprint-bounded shadow directly below its original grid position.",
+  "PF2E_FLYING_VISUAL_HELPER.Settings.enableShadow.hint": "Draw a strong Token-texture takeoff shadow based at the original footprint with only slight height and bob drift.",
   "PF2E_FLYING_VISUAL_HELPER.Settings.standOpacity.name": "Stand Opacity",
   "PF2E_FLYING_VISUAL_HELPER.Settings.standOpacity.hint": "Adjust the top-down acrylic rim, support point, and interaction X-ray opacity.",
   "PF2E_FLYING_VISUAL_HELPER.Settings.shadowOpacity.name": "Shadow Opacity",
@@ -32,5 +32,7 @@
   "PF2E_FLYING_VISUAL_HELPER.Airspace.targetToken": "Target {name}",
   "PF2E_FLYING_VISUAL_HELPER.Airspace.untargetToken": "Remove target from {name}",
   "PF2E_FLYING_VISUAL_HELPER.Airspace.controlButton": "Open 3D Airspace Explorer",
-  "PF2E_FLYING_VISUAL_HELPER.Airspace.drag": "Drag the 3D Airspace Explorer"
+  "PF2E_FLYING_VISUAL_HELPER.Airspace.drag": "Drag the floating 3D Airspace window",
+  "PF2E_FLYING_VISUAL_HELPER.Airspace.resetCamera": "Reset 3D camera",
+  "PF2E_FLYING_VISUAL_HELPER.Airspace.orbitHint": "Drag to rotate · Wheel to zoom"
 }
