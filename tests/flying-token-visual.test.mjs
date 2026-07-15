@@ -398,7 +398,7 @@ test("anchors non-rectangular Token shapes to Foundry's actual local center", ()
   assert.deepEqual([token.mesh.x, token.mesh.y], [token.center.x, token.center.y]);
 });
 
-test("renders a projected rod plus the Token texture's real upper-right silhouette", () => {
+test("renders the Token texture silhouette on its original ground square", () => {
   const token = makeToken(60);
   const visual = new FlyingTokenVisual(token, settings);
   const standEllipses = visual.standGraphics.commands.filter(command => command[0] === "drawEllipse");
@@ -411,10 +411,10 @@ test("renders a projected rod plus the Token texture's real upper-right silhouet
   assert.ok(specularLines.length >= 3);
   assert.ok(Math.max(...specularLines.map(command => command[1])) <= 3.5);
   assert.equal(visual.standSpecularGraphics.blendMode, "screen");
-  assert.equal(shadowFills.length, 4);
+  assert.equal(shadowFills.length, 2);
   assert.equal(
     visual.shadowGraphics.commands.filter(command => command[0] === "drawPolygon").length,
-    2
+    0
   );
   assert.ok(Math.max(...shadowFills.map(command => command[2])) > 0.1);
   assert.equal(visual.shadowCoreSprite.texture, token.mesh.texture);
@@ -426,6 +426,8 @@ test("renders a projected rod plus the Token texture's real upper-right silhouet
   );
   assertClose(visual.shadowCoreSprite.x, visual.metrics.shadow.x);
   assertClose(visual.shadowCoreSprite.y, visual.metrics.shadow.y);
+  assertClose(visual.shadowCoreSprite.x, visual.metrics.base.x);
+  assertClose(visual.shadowCoreSprite.y, visual.metrics.base.y);
   assertClose(visual.shadowCoreSprite.width, visual.metrics.shadow.width);
   assertClose(visual.shadowCoreSprite.height, visual.metrics.shadow.height);
   assert.ok(visual.shadowPenumbraSprite.width > visual.shadowCoreSprite.width);
@@ -482,8 +484,14 @@ test("ambient motion updates only the cached pose and never rebuilds PIXI geomet
   const scaleWrites = token.mesh.scale.setCalls;
   const alphaWrites = token.mesh.alphaWrites;
   const positionWrites = token.mesh.position.setCalls;
+  const shadowWidths = [visual.shadowCoreSprite.width];
+  const shadowAlphas = [visual.shadowCoreSprite.alpha];
 
-  for (const elapsed of [900, 950, 1000]) visual.tick(visual.ambientStartedAt + elapsed);
+  for (const elapsed of [900, 950, 1000]) {
+    visual.tick(visual.ambientStartedAt + elapsed);
+    shadowWidths.push(visual.shadowCoreSprite.width);
+    shadowAlphas.push(visual.shadowCoreSprite.alpha);
+  }
 
   assert.strictEqual(visual.standGraphics.commands, bodyCommands);
   assert.strictEqual(visual.standSpecularGraphics.commands, specularCommands);
@@ -494,6 +502,10 @@ test("ambient motion updates only the cached pose and never rebuilds PIXI geomet
   assert.ok(token.mesh.position.setCalls > positionWrites);
   assert.ok(Math.abs(token.mesh.y - staticMeshY) <= visual.metrics.token.bobAmplitude + 1e-9);
   assert.ok(Math.abs(token.mesh.y - staticMeshY) > 1e-6);
+  assertClose(visual.shadowCoreSprite.x, visual.metrics.base.x);
+  assertClose(visual.shadowCoreSprite.y, visual.metrics.base.y);
+  assert.ok(new Set(shadowWidths).size > 1, "ground shadow scale should follow airborne bob");
+  assert.ok(new Set(shadowAlphas).size > 1, "ground shadow density should follow airborne bob");
   visual.destroy();
 });
 

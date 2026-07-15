@@ -110,7 +110,7 @@ test("smootherStep is bounded, monotonic, and stable outside its domain", () => 
   assert.ok(samples[4] < samples[5]);
 });
 
-test("lift, stand length, and bounded shadow drift grow with elevation", () => {
+test("lift and stand length grow while the ground shadow remains anchored", () => {
   const low = calculateVisualMetrics({ ...base, elevation: 10 });
   const medium = calculateVisualMetrics({ ...base, elevation: 60 });
   const high = calculateVisualMetrics({ ...base, elevation: 120 });
@@ -118,10 +118,11 @@ test("lift, stand length, and bounded shadow drift grow with elevation", () => {
   assert.ok(medium.token.offsetY > high.token.offsetY);
   assert.ok(low.stand.length < medium.stand.length);
   assert.ok(medium.stand.length < high.stand.length);
-  assert.ok(low.shadow.y > medium.shadow.y);
-  assert.ok(medium.shadow.y > high.shadow.y);
-  assert.ok(low.shadow.x > low.base.x);
-  assert.ok(low.shadow.y < low.base.y);
+  for (const metrics of [low, medium, high]) {
+    assert.equal(metrics.shadow.x, metrics.base.x);
+    assert.equal(metrics.shadow.y, metrics.base.y);
+    assert.equal(metrics.shadow.distance, 0);
+  }
 });
 
 test("keeps the acrylic plate concentric while applying only bounded top-view parallax", () => {
@@ -290,20 +291,22 @@ test("swapping width and height preserves perspective and exposes only a bounded
   }
 });
 
-test("solar parallel light keeps true Token size while height softens and fades the cast", () => {
+test("centered parallel light keeps the shadow within the Token footprint", () => {
   const low = calculateVisualMetrics({ ...base, elevation: 10 });
   const high = calculateVisualMetrics({ ...base, elevation: 120 });
-  assert.equal(low.shadow.projectionScale, 1);
-  assert.equal(high.shadow.projectionScale, 1);
+  assert.equal(low.shadow.projectionScale, 0.9);
+  assert.equal(high.shadow.projectionScale, 0.9);
   assert.equal(high.shadow.radiusX, low.shadow.radiusX);
   assert.equal(high.shadow.radiusY, low.shadow.radiusY);
   assert.equal(high.shadow.width, low.shadow.width);
   assert.equal(high.shadow.height, low.shadow.height);
+  assert.ok(high.shadow.width < base.tokenWidth);
+  assert.ok(high.shadow.height < base.tokenHeight);
   assert.ok(high.shadow.softness > low.shadow.softness);
   assert.ok(high.shadow.alpha < low.shadow.alpha);
 });
 
-test("keeps a prominent true-size solar cast and projects the rod to it at tactical elevation", () => {
+test("keeps a prominent silhouette centered on the original Token square", () => {
   const metrics = calculateVisualMetrics({
     ...base,
     elevation: 60,
@@ -314,11 +317,11 @@ test("keeps a prominent true-size solar cast and projects the rod to it at tacti
     metrics.shadow.y - metrics.base.y
   );
 
-  assertApproximatelyEqual(distance, 400);
+  assertApproximatelyEqual(distance, 0);
   assert.ok(metrics.shadow.alpha > 0.4, "cast shadow should survive height falloff");
-  assert.equal(metrics.shadow.projectionScale, 1);
-  assert.equal(metrics.shadow.width, 100);
-  assert.equal(metrics.shadow.height, 100);
+  assert.equal(metrics.shadow.projectionScale, 0.9);
+  assert.equal(metrics.shadow.width, 90);
+  assert.equal(metrics.shadow.height, 90);
   assert.deepEqual(
     [metrics.shadow.shaftStartX, metrics.shadow.shaftStartY],
     [metrics.base.x, metrics.base.y]
@@ -329,49 +332,41 @@ test("keeps a prominent true-size solar cast and projects the rod to it at tacti
   );
   assert.ok(metrics.shadow.shaftWidth > 0);
   assert.ok(metrics.shadow.shaftAlpha > 0);
-  assert.ok(metrics.shadow.x > metrics.base.x);
-  assert.ok(metrics.shadow.y < metrics.base.y);
+  assert.equal(metrics.shadow.x, metrics.base.x);
+  assert.equal(metrics.shadow.y, metrics.base.y);
   assert.ok(metrics.shadow.contactRadiusX <= 10, "rod foot must remain much smaller than a Token");
   assert.ok(metrics.shadow.contactAlpha >= 0.1, "rod contact should remain grounded");
   assert.ok(metrics.shadow.contactCoreAlpha >= 0.07, "rod contact core should remain distinct");
 });
 
-test("shadow projection starts at zero and grows linearly with elevation", () => {
+test("shadow remains centered at every elevation", () => {
   const zero = calculateVisualMetrics({ ...base, elevation: 0 });
   assert.equal(zero.shadow.distance, 0);
 
-  for (const [elevation, expectedDistance] of [
-    [5, 100 / 3],
-    [10, 200 / 3],
-    [20, 400 / 3],
-    [60, 400],
-    [100, 2000 / 3],
-    [1_200, 8_000]
-  ]) {
+  for (const elevation of [5, 10, 20, 60, 100, 1_200]) {
     const metrics = calculateVisualMetrics({ ...base, elevation });
     const deltaX = metrics.shadow.x - metrics.base.x;
     const deltaY = metrics.shadow.y - metrics.base.y;
     const distance = Math.hypot(deltaX, deltaY);
-    assertApproximatelyEqual(metrics.shadow.distance, expectedDistance);
-    assertApproximatelyEqual(distance, expectedDistance);
-    assertApproximatelyEqual(deltaX / distance, Math.sqrt(3) / 2);
-    assertApproximatelyEqual(deltaY / distance, -0.5);
-    assert.ok(metrics.shadow.width >= 100);
-    assert.ok(metrics.shadow.height >= 100);
+    assert.equal(metrics.shadow.distance, 0);
+    assert.equal(distance, 0);
+    assert.equal(deltaX, 0);
+    assert.equal(deltaY, 0);
+    assert.ok(metrics.shadow.width <= base.tokenWidth);
+    assert.ok(metrics.shadow.height <= base.tokenHeight);
   }
 });
 
-test("a 10 ft projected rod clears standard Token art and draws above its cast", () => {
+test("a 10 ft shadow and penumbra fit inside a standard Token footprint", () => {
   const metrics = calculateVisualMetrics({ ...base, elevation: 10 });
-  assert.ok(
-    metrics.shadow.distance - (base.tokenWidth / 2) >= 15,
-    "10 ft must expose a readable projected rod beyond a standard Token edge"
-  );
+  assert.equal(metrics.shadow.distance, 0);
+  assert.ok(metrics.shadow.width * (1 + metrics.shadow.softness) <= base.tokenWidth);
+  assert.ok(metrics.shadow.height * (1 + metrics.shadow.softness) <= base.tokenHeight);
   assert.ok(metrics.shadow.shaftWidth >= 4);
   assert.ok(metrics.shadow.shaftAlpha > metrics.shadow.alpha * 0.8);
 });
 
-test("rod projection runs from the footprint to the upper-right Token projection", () => {
+test("rod-shadow endpoints remain on the footprint under a top-down light", () => {
   const samples = [5, 30, 100]
     .map(elevation => calculateVisualMetrics({ ...base, elevation }));
   for (const metrics of samples) {
@@ -392,8 +387,8 @@ test("rod projection runs from the footprint to the upper-right Token projection
       ),
       metrics.shadow.distance
     );
-    assert.ok(metrics.shadow.x > metrics.base.x);
-    assert.ok(metrics.shadow.y < metrics.base.y);
+    assert.equal(metrics.shadow.x, metrics.base.x);
+    assert.equal(metrics.shadow.y, metrics.base.y);
   }
 });
 
@@ -559,11 +554,13 @@ test("all numeric outputs stay finite for invalid, subnormal, and extreme inputs
   }
 });
 
-test("shadow multiplier changes shadow drift without changing the stand", () => {
+test("legacy shadow multiplier cannot move the centered 0.6 shadow", () => {
   const near = calculateVisualMetrics({ ...base, elevation: 60, shadowDistanceMultiplier: 0.5 });
   const far = calculateVisualMetrics({ ...base, elevation: 60, shadowDistanceMultiplier: 2 });
   assert.equal(near.stand.length, far.stand.length);
-  assert.ok(near.shadow.y > far.shadow.y);
+  assert.deepEqual([near.shadow.x, near.shadow.y], [far.shadow.x, far.shadow.y]);
+  assert.equal(near.shadow.distance, 0);
+  assert.equal(far.shadow.distance, 0);
 });
 
 test("animation easing and duration are bounded", () => {
@@ -595,11 +592,12 @@ test("ambient offset starts at rest and respects amplitude, period, and reduced 
   }
 });
 
-test("airborne bob remains visible but smaller than the bounded top-view parallax", () => {
+test("airborne bob remains visible but smaller than the bounded top-view lift", () => {
   const low = calculateVisualMetrics({ ...base, elevation: 5 });
   const high = calculateVisualMetrics({ ...base, elevation: 100 });
 
-  assert.ok(low.token.bobAmplitude >= 0.6, "a one-grid flight should have a readable float");
+  assert.ok(low.token.bobAmplitude >= 1.1, "a one-grid flight should have a readable float");
   assert.ok(high.token.bobAmplitude > low.token.bobAmplitude);
-  assert.ok(high.token.bobAmplitude <= 1.25, "ambient motion must remain subtle");
+  assert.ok(high.token.bobAmplitude <= 2.25, "ambient motion must remain subtle");
+  assert.ok(high.token.bobAmplitude < Math.abs(high.token.offsetY));
 });

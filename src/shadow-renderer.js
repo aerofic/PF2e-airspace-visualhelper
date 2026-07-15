@@ -13,6 +13,7 @@ export class ShadowRenderer {
     this.graphics = graphics;
     this.penumbraSprite = penumbraSprite;
     this.coreSprite = coreSprite;
+    this.ambientBase = null;
 
     graphics.eventMode = "none";
     graphics.blendMode = multiplyBlend(graphics.blendMode);
@@ -44,6 +45,7 @@ export class ShadowRenderer {
     );
     graphics.visible = visible;
     if (!visible) {
+      this.ambientBase = null;
       hideSprite(this.penumbraSprite);
       hideSprite(this.coreSprite);
       return;
@@ -67,12 +69,43 @@ export class ShadowRenderer {
         alphaWeight: 0.82,
         trail: 0
       });
+      this.#captureAmbientBase();
+      this.applyAmbient(0);
       return;
     }
 
+    this.ambientBase = null;
     hideSprite(this.penumbraSprite);
     hideSprite(this.coreSprite);
     drawFallbackProjection(graphics, shadow);
+  }
+
+  /**
+   * Keep the ground silhouette breathing with the airborne model without
+   * rebuilding Graphics. Its center remains on the TokenDocument footprint;
+   * rise only changes density and the penumbra by a few percent.
+   */
+  applyAmbient(offsetY = 0) {
+    const base = this.ambientBase;
+    if (!base) return;
+    const rise = clamp(-finiteOr(offsetY, 0), -3, 3);
+    const alphaFactor = clamp(1 - (rise * 0.018), 0.93, 1.05);
+
+    applyAmbientSprite(this.coreSprite, base.core, {
+      alphaFactor,
+      scale: 1 + (rise * 0.002)
+    });
+    applyAmbientSprite(this.penumbraSprite, base.penumbra, {
+      alphaFactor: clamp(alphaFactor * (1 - (rise * 0.006)), 0.9, 1.06),
+      scale: 1 + (rise * 0.008)
+    });
+  }
+
+  #captureAmbientBase() {
+    this.ambientBase = {
+      core: snapshotSprite(this.coreSprite),
+      penumbra: snapshotSprite(this.penumbraSprite)
+    };
   }
 }
 
@@ -230,6 +263,30 @@ function setPosition(displayObject, x, y) {
     displayObject.x = x;
     displayObject.y = y;
   }
+}
+
+function snapshotSprite(sprite) {
+  return {
+    x: finiteOr(sprite?.position?.x ?? sprite?.x, 0),
+    y: finiteOr(sprite?.position?.y ?? sprite?.y, 0),
+    alpha: clampedAlpha(sprite?.alpha),
+    width: Math.max(0, finiteOr(sprite?.width, 0)),
+    height: Math.max(0, finiteOr(sprite?.height, 0))
+  };
+}
+
+function applyAmbientSprite(sprite, base, {
+  x = 0,
+  y = 0,
+  alphaFactor = 1,
+  scale = 1
+} = {}) {
+  if (!sprite || !base) return;
+  setPosition(sprite, base.x + x, base.y + y);
+  sprite.alpha = clampedAlpha(base.alpha * alphaFactor);
+  const safeScale = clamp(finiteOr(scale, 1), 0.96, 1.04);
+  sprite.width = base.width * safeScale;
+  sprite.height = base.height * safeScale;
 }
 
 function clampedAlpha(value) {

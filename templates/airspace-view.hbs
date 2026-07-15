@@ -1,0 +1,76 @@
+<section class="airspace-view">
+  {{#if hasSelection}}
+    <div class="airspace-anchor" title="{{selected.tooltipText}}">
+      <img src="{{selected.img}}" alt="">
+      <span>{{selected.name}}</span>
+      <strong>{{selected.elevationLabel}}</strong>
+      <small>{{nearbyCount}} {{localize "PF2E_FLYING_VISUAL_HELPER.Airspace.visible"}}</small>
+    </div>
+
+    <div
+      class="airspace-stage"
+      style="--airspace-width: {{view.width}}px; --airspace-height: {{view.height}}px;"
+      role="region"
+      aria-label="{{localize 'PF2E_FLYING_VISUAL_HELPER.Airspace.viewLabel'}}"
+    >
+      <svg class="airspace-grid" viewBox="0 0 {{view.width}} {{view.height}}" aria-hidden="true">
+        <ellipse cx="{{view.centerX}}" cy="{{view.groundCenterY}}" rx="{{view.groundRadiusX}}" ry="{{view.groundRadiusY}}"></ellipse>
+        {{#each view.gridLines}}
+          <line x1="{{x1}}" y1="{{y1}}" x2="{{x2}}" y2="{{y2}}"></line>
+        {{/each}}
+      </svg>
+
+      <div class="airspace-altitude-axis" style="--airspace-ground-y: {{view.groundCenterY}}px;" aria-hidden="true"></div>
+      {{#each view.altitudeTicks}}
+        <div class="airspace-altitude-tick {{#if major}}is-major{{/if}}" style="--airspace-y: {{y}}px;" aria-hidden="true">
+          <span>{{label}}</span>
+        </div>
+      {{/each}}
+
+      {{#each view.nodes}}
+        <div class="airspace-ground-point {{#if selected}}is-selected{{/if}}" style="--airspace-x: {{groundX}}px; --airspace-y: {{groundY}}px;" aria-hidden="true"></div>
+        {{#if verticalLength}}
+          <div
+            class="airspace-height-line is-{{lineDirection}}"
+            style="--airspace-x: {{groundX}}px; --airspace-y: {{lineTop}}px; --airspace-length: {{verticalLength}}px;"
+            aria-hidden="true"
+          ></div>
+        {{/if}}
+        <div
+          class="airspace-token {{#if selected}}is-selected{{/if}} {{#if targeted}}is-targeted{{/if}}"
+          style="--airspace-x: {{tokenX}}px; --airspace-y: {{tokenY}}px;"
+        >
+          <button
+            type="button"
+            class="airspace-select-token"
+            data-action="selectToken"
+            data-token-id="{{id}}"
+            aria-label="{{accessibleLabel}}"
+            title="{{tooltipText}}"
+          >
+            <img src="{{img}}" alt="">
+            <span>{{name}}</span>
+            <strong>{{elevationLabel}}</strong>
+          </button>
+          <button
+            type="button"
+            class="airspace-target-token"
+            data-action="targetToken"
+            data-token-id="{{id}}"
+            aria-pressed="{{targeted}}"
+            aria-label="{{targetLabel}}"
+            title="{{targetLabel}}"
+          >
+            <i class="fa-solid fa-bullseye" aria-hidden="true"></i>
+          </button>
+          <small>{{distanceLabel}}</small>
+        </div>
+      {{/each}}
+    </div>
+  {{else}}
+    <p class="airspace-empty">
+      <i class="fa-solid fa-location-crosshairs" aria-hidden="true"></i>
+      {{selectPrompt}}
+    </p>
+  {{/if}}
+</section>

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.0 — Local 3D Airspace Explorer
+
+- Replaced the global altitude list with a selected-Token-centered, fixed-isometric 3D airspace view that projects real relative Canvas X/Y and exact elevation into one local tactical panel.
+- Added a 1–30-space live range slider; input updates only the airspace view and the client setting persists after release.
+- Kept the Token-controls side button as the only opening path. No open shortcut is registered, and every Scene starts with the panel closed.
+- Added separate, permission-safe unit actions: clicking the miniature selects, pans, and pings; its bullseye toggles Foundry's native local Target state.
+- Moved the Token-texture ground shadow directly under the original TokenDocument footprint and bounded the complete core/penumbra within that footprint.
+- Synchronized shadow density and sub-pixel silhouette breathing with airborne bob without moving the shadow center or rebuilding PIXI Graphics per frame.
+- Increased airborne bob modestly while retaining the same-grid maximum lift, native elevation-label following, Z Scatter composition, reduced-motion support, and PF2e rule boundaries.
+- Hid obsolete 0.5.x Height Axis and Shadow Distance Multiplier preferences while retaining their client keys for downgrade safety.
+- Added automated coverage for local XYZ projection, radius filtering, selection, Target, privacy, lifecycle, centered shadows, ambient synchronization, finite bounds, and existing Canvas integrations.
+
 ## 0.5.3 — Solar Parallel-Light Projection
 
 - Replaced the 0.5.2 finite point-light magnification with a solar parallel-light model.

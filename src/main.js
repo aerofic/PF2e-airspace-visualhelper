@@ -1,15 +1,15 @@
-import { AltitudeHud } from "./altitude-hud.js";
+import { AirspaceExplorer } from "./airspace-explorer.js";
+import { reconcileAirspaceAvailability, resetAirspaceForScene } from "./airspace-lifecycle.js";
 import { MODULE_ID, SETTINGS, SYSTEM_ID } from "./constants.js";
 import { FlyingVisualLayer } from "./flying-visual-layer.js";
-import { reconcileHudAvailability, resetHudForScene } from "./hud-lifecycle.js";
 import { readSettings, registerSettings } from "./settings.js";
 
 const flyingVisualLayer = new FlyingVisualLayer();
-const altitudeHud = new AltitudeHud();
+const airspaceExplorer = new AirspaceExplorer();
 let moduleReady = false;
 
 Hooks.once("init", () => {
-  console.info(`${MODULE_ID} | Initializing V2 airspace helper`);
+  console.info(`${MODULE_ID} | Initializing 0.6 airspace explorer`);
   registerSettings(onSettingChange);
 });
 
@@ -21,25 +21,25 @@ Hooks.once("ready", () => {
 
   moduleReady = true;
   if (canvas.ready) flyingVisualLayer.activate(canvas);
-  void syncHudVisibility();
+  void syncAirspaceAvailability();
 });
 
 Hooks.on("canvasReady", readyCanvas => {
   if (game.system.id !== SYSTEM_ID) return;
   flyingVisualLayer.activate(readyCanvas);
-  // A newly viewed Scene always starts without the HUD. Only the explicit
-  // Token-control button may open it for this Canvas.
-  void resetHudForScene(altitudeHud);
+  // Every Scene begins with the panel closed. Only the explicit Token-control
+  // button opens the airspace explorer; no keyboard binding is registered.
+  void resetAirspaceForScene(airspaceExplorer);
 });
 
 Hooks.on("canvasTearDown", tearingDownCanvas => {
   flyingVisualLayer.deactivate(tearingDownCanvas);
-  if (altitudeHud.rendered) void altitudeHud.close({ animate: false });
+  if (airspaceExplorer.rendered) void airspaceExplorer.close({ animate: false });
 });
 
 Hooks.on("drawToken", token => {
   flyingVisualLayer.onDrawToken(token);
-  altitudeHud.requestRefresh();
+  airspaceExplorer.requestRefresh();
 });
 
 Hooks.on("refreshToken", (token, flags = {}) => {
@@ -48,101 +48,108 @@ Hooks.on("refreshToken", (token, flags = {}) => {
 
 Hooks.on("destroyToken", token => {
   flyingVisualLayer.onDestroyToken(token);
-  altitudeHud.requestRefresh();
+  airspaceExplorer.requestRefresh();
 });
 
 Hooks.on("createToken", document => {
-  if (document.parent === canvas.scene) altitudeHud.requestRefresh();
+  if (document.parent === canvas.scene) airspaceExplorer.requestRefresh();
 });
 
 Hooks.on("deleteToken", document => {
-  if (document.parent === canvas.scene) altitudeHud.requestRefresh();
+  if (document.parent === canvas.scene) airspaceExplorer.requestRefresh();
 });
 
 Hooks.on("updateToken", (document, changes, options, userId) => {
   flyingVisualLayer.onUpdateToken(document, changes, options, userId);
-  if ((document.parent === canvas.scene) && tokenChangesAffectHud(changes)) altitudeHud.requestRefresh();
+  if ((document.parent === canvas.scene) && tokenChangesAffectAirspace(changes)) {
+    airspaceExplorer.requestRefresh();
+  }
 });
 
 Hooks.on("moveToken", (document, movement, operation, user) => {
   flyingVisualLayer.onMoveToken(document, movement, operation, user);
-  if (document.parent === canvas.scene) altitudeHud.requestRefresh();
+  if (document.parent === canvas.scene) airspaceExplorer.requestRefresh();
 });
 
 Hooks.on("controlToken", (token, controlled) => {
-  // Refresh the module-owned footprint cue without touching Foundry's border,
-  // hit area, targeting, or any TokenDocument state.
   flyingVisualLayer.onRefreshToken(token, { refreshVisibility: true });
-  altitudeHud.onControlToken(token, controlled);
+  airspaceExplorer.onControlToken(token, controlled);
 });
+
+Hooks.on("targetToken", () => airspaceExplorer.requestRefresh());
 
 Hooks.on("hoverToken", token => {
   flyingVisualLayer.onRefreshToken(token, { refreshVisibility: true });
 });
 
 Hooks.on("updateActor", (actor, changes) => {
-  if (!altitudeHud.rendered || !("name" in changes || "system" in changes)) return;
-  if (actorHasSceneToken(actor)) altitudeHud.requestRefresh();
+  if (!airspaceExplorer.rendered || !("name" in changes || "system" in changes)) return;
+  if (actorHasSceneToken(actor)) airspaceExplorer.requestRefresh();
 });
 
 // PF2e prepared Fly Speed can be contributed by embedded Items and Rule
-// Elements without a separate updateActor hook. Refresh only for actors which
-// actually have a rendered Token in the viewed Scene.
+// Elements without a separate updateActor hook.
 for (const hookName of ["createItem", "updateItem", "deleteItem"]) {
   Hooks.on(hookName, item => {
-    if (!altitudeHud.rendered) return;
+    if (!airspaceExplorer.rendered) return;
     const actor = item.parent;
-    if (actor?.documentName === "Actor" && actorHasSceneToken(actor)) altitudeHud.requestRefresh();
+    if (actor?.documentName === "Actor" && actorHasSceneToken(actor)) {
+      airspaceExplorer.requestRefresh();
+    }
   });
 }
 
-// Visibility changes are debounced; repeated sight updates during one movement
-// produce one HUD render after the burst rather than one render per frame.
-Hooks.on("sightRefresh", () => altitudeHud.requestRefresh());
+Hooks.on("sightRefresh", () => airspaceExplorer.requestRefresh());
 
 Hooks.on("updateScene", (scene, changes) => {
   if (scene !== canvas.scene) return;
   if ("grid" in changes) flyingVisualLayer.refreshAll();
-  if ("grid" in changes || "name" in changes) altitudeHud.requestRefresh();
+  if ("grid" in changes || "name" in changes) airspaceExplorer.requestRefresh();
 });
 
 Hooks.on("getSceneControlButtons", controls => {
   if (game.system.id !== SYSTEM_ID || !controls.tokens?.tools) return;
   const settings = readSettings();
-  controls.tokens.tools.pf2eAirspaceHud = {
-    name: "pf2eAirspaceHud",
-    title: "PF2E_FLYING_VISUAL_HELPER.Hud.controlButton",
-    icon: "fa-solid fa-layer-group",
+  controls.tokens.tools.pf2eAirspaceExplorer = {
+    name: "pf2eAirspaceExplorer",
+    title: "PF2E_FLYING_VISUAL_HELPER.Airspace.controlButton",
+    icon: "fa-solid fa-cubes",
     order: 90,
     button: true,
     visible: settings.enabled && settings.enableAltitudeHud,
-    onChange: () => void altitudeHud.toggle()
+    onChange: () => void airspaceExplorer.toggle()
   };
 });
 
-function onSettingChange(key, _value) {
-  if (!moduleReady || (game.system.id !== SYSTEM_ID)) return;
-  flyingVisualLayer.refreshSettings();
+function onSettingChange(key, value) {
+  if (!moduleReady || game.system.id !== SYSTEM_ID) return;
+
+  if (key === SETTINGS.AIRSPACE_RADIUS) {
+    airspaceExplorer.setRadius(value);
+    return;
+  }
 
   if ((key === SETTINGS.ENABLED) || (key === SETTINGS.ENABLE_ALTITUDE_HUD)) {
-    void syncHudVisibility();
+    flyingVisualLayer.refreshSettings();
+    void syncAirspaceAvailability();
     void ui.controls?.render({ reset: true });
     return;
   }
-  altitudeHud.requestRefresh({ immediate: key === SETTINGS.ENABLE_HEIGHT_AXIS });
+
+  flyingVisualLayer.refreshSettings();
 }
 
-async function syncHudVisibility() {
+async function syncAirspaceAvailability() {
   const settings = readSettings();
-  await reconcileHudAvailability(altitudeHud, {
+  await reconcileAirspaceAvailability(airspaceExplorer, {
     moduleReady,
     canvasReady: canvas.ready,
     enabled: settings.enabled,
-    enableAltitudeHud: settings.enableAltitudeHud
+    enableAirspace: settings.enableAltitudeHud
   });
 }
 
-function tokenChangesAffectHud(changes) {
+function tokenChangesAffectAirspace(changes) {
   return [
     "elevation",
     "x",

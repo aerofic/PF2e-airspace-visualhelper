@@ -223,6 +223,7 @@ export class FlyingTokenVisual {
       this.#syncCompatibility({ enabled: true });
       this.#syncPosition();
       this.tokenLift.applyAmbient(this.ambientOffsetY, this.zScatterCompatibility.state);
+      this.shadow.applyAmbient(this.ambientOffsetY);
       this.lastCompatibilityApplyAt = now;
     }
 
@@ -237,6 +238,7 @@ export class FlyingTokenVisual {
       this.#syncCompatibility({ enabled: true });
       this.#syncPosition();
       this.tokenLift.applyAmbient(this.ambientOffsetY, this.zScatterCompatibility.state);
+      this.shadow.applyAmbient(this.ambientOffsetY);
       this.lastAmbientApplyAt = now;
     } else if (!this.needsAmbientMotion && (Math.abs(this.ambientOffsetY) > VISUAL_EPSILON)) {
       this.#resetAmbientMotion({ apply: true });
@@ -316,8 +318,7 @@ export class FlyingTokenVisual {
       groundY: ground.y,
       standOpacity: this.settings.standOpacity,
       shadowOpacity: this.settings.shadowOpacity,
-      projectionOpacity: this.settings.projectionOpacity,
-      shadowDistanceMultiplier: this.settings.shadowDistanceMultiplier
+      projectionOpacity: this.settings.projectionOpacity
     });
     this.metrics = metrics;
     this.#syncCompatibility({ enabled: this.#shouldEnableTokenLift(metrics) });
@@ -399,6 +400,7 @@ export class FlyingTokenVisual {
       anchorX: mesh?.anchor?.x ?? 0.5,
       anchorY: mesh?.anchor?.y ?? 0.5
     });
+    this.shadow.applyAmbient(this.ambientOffsetY);
     this.#renderProjection();
     this.#renderStand();
   }
@@ -436,6 +438,7 @@ export class FlyingTokenVisual {
     if (apply && hadOffset) {
       this.#syncCompatibility({ enabled: this.liftEnabled });
       this.tokenLift.applyAmbient(0, this.zScatterCompatibility.state);
+      this.shadow.applyAmbient(0);
     }
   }
 

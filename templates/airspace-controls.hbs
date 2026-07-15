@@ -1,0 +1,39 @@
+<section class="airspace-controls" aria-label="{{localize 'PF2E_FLYING_VISUAL_HELPER.Airspace.title'}}">
+  <header class="airspace-header">
+    <button
+      type="button"
+      class="airspace-drag-handle"
+      aria-label="{{localize 'PF2E_FLYING_VISUAL_HELPER.Airspace.drag'}}"
+      title="{{localize 'PF2E_FLYING_VISUAL_HELPER.Airspace.drag'}}"
+    >
+      <i class="fa-solid fa-cubes" aria-hidden="true"></i>
+      <span>{{localize "PF2E_FLYING_VISUAL_HELPER.Airspace.title"}}</span>
+    </button>
+    <button
+      type="button"
+      class="airspace-close"
+      data-action="closeAirspace"
+      aria-label="{{localize 'Close'}}"
+      title="{{localize 'Close'}}"
+    >
+      <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+    </button>
+  </header>
+
+  <div class="airspace-range">
+    <label for="pf2e-flying-airspace-radius">
+      {{localize "PF2E_FLYING_VISUAL_HELPER.Airspace.range"}}
+    </label>
+    <input
+      id="pf2e-flying-airspace-radius"
+      type="range"
+      min="{{radius.min}}"
+      max="{{radius.max}}"
+      step="{{radius.step}}"
+      value="{{radius.value}}"
+      data-airspace-radius
+      aria-label="{{localize 'PF2E_FLYING_VISUAL_HELPER.Airspace.range'}}"
+    >
+    <output for="pf2e-flying-airspace-radius" data-airspace-radius-output>{{radius.label}}</output>
+  </div>
+</section>

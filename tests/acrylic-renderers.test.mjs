@@ -197,6 +197,19 @@ test("projects the rod and reuses the Token texture for a real silhouette", () =
   assert.equal(core.eventMode, "none");
   assert.equal(core.blendMode, "multiply");
 
+  const groundX = core.x;
+  const groundY = core.y;
+  const restingWidth = core.width;
+  const restingAlpha = core.alpha;
+  renderer.applyAmbient(-2);
+  assert.equal(core.x, groundX, "ambient motion must not move the shadow off its ground point");
+  assert.equal(core.y, groundY, "ambient motion must not move the shadow off its ground point");
+  assert.ok(core.width > restingWidth, "the shadow silhouette should breathe with airborne bob");
+  assert.ok(core.alpha < restingAlpha, "rising slightly should soften the shadow density");
+  renderer.applyAmbient(0);
+  assert.equal(core.width, restingWidth);
+  assert.equal(core.alpha, restingAlpha);
+
   renderer.render(metrics, false);
   assert.equal(graphics.visible, false);
   assert.equal(core.visible, false);

@@ -20,12 +20,8 @@ export function normalizeHudElevation(value) {
 // additions and distance calculations.
 const MAX_CANVAS_DIMENSION = 1_000_000;
 const MAX_HEIGHT_STEPS = 1_000_000;
-// A 5 ft rise casts roughly 1.67 ft across the map: one third of the real
-// elevation. This preserves a readable 10 ft rod without exaggerating it into
-// the former side-view stand.
-const SHADOW_PROJECTION_PER_STEP = 1 / 3;
-const SHADOW_DIRECTION_X = Math.sqrt(3) / 2;
-const SHADOW_DIRECTION_Y = -0.5;
+const SHADOW_DIRECTION_X = 0;
+const SHADOW_DIRECTION_Y = 0;
 
 /** A continuous elevation response shared by every visual component. */
 export function calculateHeightCurve(elevation, gridDistance = 5) {
@@ -142,8 +138,7 @@ export function calculateVisualMetrics({
   groundY,
   standOpacity,
   shadowOpacity,
-  projectionOpacity,
-  shadowDistanceMultiplier
+  projectionOpacity
 }) {
   const safeElevation = normalizeFlyingElevation(elevation);
   const safeGridSize = boundedPositiveOr(gridSize, 100);
@@ -184,27 +179,20 @@ export function calculateVisualMetrics({
   const baseRadiusY = (height * 0.5) + rimOvershoot;
   const baseThickness = clamp(safeGridSize * 0.015, 1, 3);
 
-  const distanceMultiplier = clamp(finiteOr(shadowDistanceMultiplier, 1), 0.25, 3);
-  // Shadow projection begins at exactly zero and remains linear through the
-  // tactical range: the screen-space cast is one third of the rules-space
-  // elevation at the default multiplier. Only an extreme safety cap applies.
-  const desiredShadowDistance = Math.min(
-    MAX_CANVAS_DIMENSION,
-    safeGridSize * pose.heightCurve.steps * SHADOW_PROJECTION_PER_STEP * distanceMultiplier
-  );
-  const shadowX = pose.ground.x + (desiredShadowDistance * SHADOW_DIRECTION_X);
-  const shadowY = pose.ground.y + (desiredShadowDistance * SHADOW_DIRECTION_Y);
-  // Sunlight is effectively parallel at tactical-map scale. The Token's dark
-  // projected silhouette therefore keeps its real footprint size at every
-  // elevation; only travel, penumbra spread, and density change with height.
-  const shadowProjectionScale = 1;
-  const shadowSoftness = clamp(0.025 + (pose.heightCurve.steps * 0.0075), 0.025, 0.24);
-  // The Sun's finite angular diameter broadens the penumbra with receiver
-  // distance. Fade the dense core gently while its exact alpha silhouette
-  // remains one-to-one with the Token texture.
-  const shadowFalloff = 0.96 - (0.1 * signal);
-  const shadowWidth = Math.min(width, safeGridSize * 8);
-  const shadowHeight = Math.min(height, safeGridSize * 8);
+  // The shadow stays directly below the TokenDocument footprint. It is a
+  // grounded depth cue, never a second tactical position in a nearby square.
+  // Additional legacy options are safely ignored by object destructuring.
+  const desiredShadowDistance = 0;
+  const shadowX = pose.ground.x;
+  const shadowY = pose.ground.y;
+  // Parallel light preserves silhouette proportions. A 90% core plus a small
+  // penumbra keeps the full effect within the original Token footprint even
+  // during ambient breathing.
+  const shadowProjectionScale = 0.9;
+  const shadowSoftness = 0.045 + (0.045 * signal);
+  const shadowFalloff = 0.94 - (0.08 * signal);
+  const shadowWidth = Math.min(width * shadowProjectionScale, safeGridSize * 8);
+  const shadowHeight = Math.min(height * shadowProjectionScale, safeGridSize * 8);
   const shadowRadiusX = shadowWidth * 0.5;
   const shadowRadiusY = shadowHeight * 0.5;
   // The acrylic rod has a fixed physical diameter. Elevation changes the
@@ -237,7 +225,7 @@ export function calculateVisualMetrics({
       centerY: pose.tokenCenter.y,
       scale: perspectiveScale,
       alpha: alphaMultiplier,
-      bobAmplitude: takeoff * clamp(safeGridSize * (0.006 + (signal * 0.006)), 0.6, 1.25)
+      bobAmplitude: takeoff * clamp(safeGridSize * (0.011 + (signal * 0.011)), 1.1, 2.25)
     },
     stand: {
       topX: pose.standTop.x,
