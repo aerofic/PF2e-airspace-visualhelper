@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.13 — Visible Subterranean Tokens
+
+- Keeps finite negative-elevation Token artwork visible above the main map by rendering a non-interactive full-color sibling in the TokenLayer.
+- Preserves Token coordinates, selection, Target, movement, vision, distance, PF2e rules, positive-flight visuals, and the 3D airspace window.
+
 ## 0.6.2 — Compact Airspace Chrome
 
 - Compressed the 3D airspace chrome into a 24 px native drag header and one 30 px toolbar which combines the selected Token, exact elevation, range slider, range value, and camera reset action.

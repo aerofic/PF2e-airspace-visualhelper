@@ -929,7 +929,7 @@ function makeCanvas(scene, tokens, ticker) {
   return {
     ready: true,
     scene,
-    tokens: { placeables: tokens },
+    tokens: { placeables: tokens, objects: new FakeContainer() },
     grid: { size: 100, distance: 5 },
     dimensions: { size: 100, distance: 5 },
     primary: new FakeContainer(),
@@ -981,3 +981,30 @@ function comparePrimaryDisplayObjects(left, right) {
     || (Number(left.sortLayer) - Number(right.sortLayer))
     || (Number(left.sort) - Number(right.sort));
 }
+
+test("keeps negative-elevation Token artwork visible above the map", () => {
+  const scene = { id: "scene-subterranean" };
+  const token = makeToken(-5);
+  token.isVisible = true;
+  token.visible = false;
+  token.renderable = false;
+  token.document.parent = scene;
+  token.document.object = token;
+  const readyCanvas = makeCanvas(scene, [token], new FakeTicker());
+  globalThis.canvas = readyCanvas;
+  installGameSettings();
+  const layer = new FlyingVisualLayer();
+  layer.activate(readyCanvas);
+
+  assert.equal(readyCanvas.primary.children.length, 0);
+  assert.equal(readyCanvas.tokens.objects.children.length, 1);
+  const subterranean = readyCanvas.tokens.objects.children[0];
+  assert.equal(subterranean.visible, true);
+  assert.equal(subterranean.children[0].texture, token.mesh.texture);
+
+  token.document.elevation = 0;
+  layer.onUpdateToken(token.document, { elevation: 0 }, { animate: false }, "user");
+  assert.equal(subterranean.visible, false);
+  layer.deactivate(readyCanvas);
+  assert.equal(readyCanvas.tokens.objects.children.length, 0);
+});

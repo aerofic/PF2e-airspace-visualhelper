@@ -1,7 +1,8 @@
 import { FlyingTokenVisual } from "./flying-token-visual.js";
+import { SubterraneanTokenVisual, isSubterraneanElevation } from "./subterranean-token-visual.js";
 import { VISUAL_EPSILON } from "./constants.js";
 import { readSettings } from "./settings.js";
-import { normalizeFlyingElevation } from "./visual-math.js";
+import { normalizeFlyingElevation, normalizeHudElevation } from "./visual-math.js";
 
 /**
  * Canvas lifecycle manager for all flight visuals in the viewed Scene.
@@ -13,6 +14,7 @@ import { normalizeFlyingElevation } from "./visual-math.js";
 export class FlyingVisualLayer {
   #canvas = null;
   #visuals = new Map();
+  #subterraneanVisuals = new Map();
   // A single shared ticker drives both fallback elevation tweens and the
   // inexpensive idle drift of visible airborne Tokens. Individual visuals
   // never register their own PIXI ticker callbacks.
@@ -62,7 +64,10 @@ export class FlyingVisualLayer {
       return;
     }
     this.#connectMotionPreference();
-    for (const token of readyCanvas.tokens?.placeables ?? []) this.#ensureVisual(token, { ifFlying: true });
+    for (const token of readyCanvas.tokens?.placeables ?? []) {
+      this.#syncSubterraneanVisual(token);
+      this.#ensureVisual(token, { ifFlying: true });
+    }
     this.#syncAllTickers();
   }
 
@@ -93,6 +98,7 @@ export class FlyingVisualLayer {
       updated.add(visual);
     }
     for (const token of canvas.tokens?.placeables ?? []) {
+      this.#syncSubterraneanVisual(token);
       const visual = this.#ensureVisual(token, { ifFlying: true });
       if (visual && !updated.has(visual)) {
         visual.updateSettings(this.#settings);
@@ -105,6 +111,7 @@ export class FlyingVisualLayer {
   refreshAll() {
     if (!this.#settings?.enabled || !this.#canvas?.ready) return;
     for (const token of this.#canvas.tokens?.placeables ?? []) {
+      this.#syncSubterraneanVisual(token);
       const visual = this.#ensureVisual(token, { ifFlying: true });
       visual?.updateSettings(this.#settings);
       this.#syncTicker(visual);
@@ -113,6 +120,7 @@ export class FlyingVisualLayer {
 
   onDrawToken(token) {
     if (!this.#isCurrentToken(token) || !this.#settings?.enabled) return;
+    this.#syncSubterraneanVisual(token);
     const visual = this.#ensureVisual(token, { ifFlying: true });
     visual?.onDraw();
     this.#syncTicker(visual);
@@ -120,6 +128,7 @@ export class FlyingVisualLayer {
 
   onRefreshToken(token, flags = {}) {
     if (!this.#isCurrentToken(token) || !this.#settings?.enabled) return;
+    this.#syncSubterraneanVisual(token);
     const visual = this.#ensureVisual(token, { ifFlying: true });
     if (!visual) return;
 
@@ -142,6 +151,7 @@ export class FlyingVisualLayer {
   }
 
   onDestroyToken(token) {
+    this.#removeSubterraneanVisual(token);
     this.#removeVisual(token);
   }
 
@@ -149,6 +159,14 @@ export class FlyingVisualLayer {
     if (!this.#settings?.enabled || !this.#isCurrentDocument(document)) return;
     const token = document.object;
     if (!token || token.destroyed) return;
+    const targetElevation = "elevation" in changes
+      ? normalizeHudElevation(changes.elevation)
+      : normalizeHudElevation(document.elevation);
+    this.#syncSubterraneanVisual(token, targetElevation);
+    if (isSubterraneanElevation(targetElevation)) {
+      this.#removeVisual(token);
+      return;
+    }
     const needsFlightVisual = ("elevation" in changes)
       && (normalizeFlyingElevation(changes.elevation) > 0);
     const visual = this.#ensureVisual(token, {
@@ -174,6 +192,11 @@ export class FlyingVisualLayer {
     if (!this.#settings?.enabled || !this.#isCurrentDocument(document)) return;
     const destinationElevation = movement?.destination?.elevation;
     if (!Number.isFinite(destinationElevation) || !document.object) return;
+    this.#syncSubterraneanVisual(document.object, destinationElevation);
+    if (isSubterraneanElevation(destinationElevation)) {
+      this.#removeVisual(document.object);
+      return;
+    }
     const visual = this.#ensureVisual(document.object, {
       ifFlying: normalizeFlyingElevation(destinationElevation) <= 0,
       initialElevation: normalizeFlyingElevation(destinationElevation) > 0 ? 0 : undefined
@@ -227,6 +250,30 @@ export class FlyingVisualLayer {
     this.#visuals.set(token, visual);
     this.#syncTicker(visual);
     return visual;
+  }
+
+  #syncSubterraneanVisual(token, elevation = token?.document?.elevation) {
+    if (!this.#isCurrentToken(token) || token.destroyed) return;
+    let visual = this.#subterraneanVisuals.get(token);
+    if (!isSubterraneanElevation(elevation)) {
+      visual?.render({ elevation });
+      return;
+    }
+    if (!visual || visual.destroyed) {
+      visual?.destroy?.();
+      visual = new SubterraneanTokenVisual(token, {
+        parent: this.#canvas?.tokens?.objects ?? token.parent
+      });
+      this.#subterraneanVisuals.set(token, visual);
+    }
+    visual.render({ elevation });
+  }
+
+  #removeSubterraneanVisual(token) {
+    const visual = this.#subterraneanVisuals.get(token);
+    if (!visual) return;
+    visual.destroy();
+    this.#subterraneanVisuals.delete(token);
   }
 
   #removeVisual(token) {
@@ -314,6 +361,8 @@ export class FlyingVisualLayer {
     this.#ticking.clear();
     for (const visual of this.#visuals.values()) visual.destroy();
     this.#visuals.clear();
+    for (const visual of this.#subterraneanVisuals.values()) visual.destroy();
+    this.#subterraneanVisuals.clear();
   }
 }
 
