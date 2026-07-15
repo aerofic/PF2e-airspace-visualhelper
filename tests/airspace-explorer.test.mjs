@@ -150,8 +150,8 @@ test("CSS keeps the floating tactical view highly transparent and orbitable", ()
   assert.match(css, /\.airspace-explorer \.window-header/);
   assert.match(css, /\.airspace-explorer \.window-content/);
   assert.match(css, /\.airspace-explorer \.airspace-stage/);
-  assert.match(rootRule, /--airspace-token-art-size:\s*36px/);
-  assert.match(rootRule, /--airspace-token-node-width:\s*56px/);
+  assert.match(rootRule, /--airspace-token-art-size:\s*45px/);
+  assert.match(rootRule, /--airspace-token-node-width:\s*64px/);
   assert.match(css, /cursor:\s*grab/);
   assert.match(css, /touch-action:\s*none/);
 });
