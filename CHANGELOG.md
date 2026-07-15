@@ -5,7 +5,7 @@
 - Replaced the fixed side presentation with a highly transparent native ApplicationV2 airspace window whose opening size adapts once to viewport space and visible Token density.
 - Fixed the explorer being inserted into normal document flow by restoring Foundry's native window frame, absolute positioning contract, title-bar dragging, z-index management, close control, and resize handle.
 - Added live mouse orbit controls: drag blank 3D space to change yaw and pitch, use the wheel to zoom, and use the range-bar action to reset the camera.
-- Increased 3D airspace Token miniatures from 30 px to 45 px and rebalanced their node, label, distance, and Target-control spacing for better identification.
+- Increased 3D airspace Token miniatures from 30 px to 40 px and rebalanced their node, label, distance, and Target-control spacing for better identification.
 - Removed the acrylic base, support rod, connector, and landing-ring renderers and hid their legacy client preferences for downgrade safety.
 - Set the exact airborne-art offset to 5% of the Token footprint height per 10 ft, capped at 30% from 60 ft onward.
 - Rebuilt the ground cue as a strong, texture-accurate Token shadow based at the original rules footprint; height adds at most about 4.5% footprint drift and bob adds less than 20% of its own motion.

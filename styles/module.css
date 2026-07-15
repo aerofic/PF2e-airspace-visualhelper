@@ -5,8 +5,8 @@
   --airspace-cyan: rgb(124 224 255 / 0.76);
   --airspace-text: rgb(244 250 255 / 0.96);
   --airspace-muted: rgb(207 225 235 / 0.72);
-  --airspace-token-art-size: 45px;
-  --airspace-token-node-width: 64px;
+  --airspace-token-art-size: 40px;
+  --airspace-token-node-width: 60px;
   position: absolute;
   display: flex;
   flex-direction: column;
@@ -295,7 +295,7 @@
   grid-template-columns: var(--airspace-token-art-size);
   justify-content: center;
   width: var(--airspace-token-node-width);
-  min-height: 61px;
+  min-height: 56px;
   margin: 0;
   padding: 0;
   border: 0;
@@ -315,7 +315,7 @@
 .airspace-explorer .airspace-select-token > strong {
   display: block;
   overflow: hidden;
-  max-width: 84px;
+  max-width: 80px;
   margin-left: -10px;
   text-overflow: ellipsis;
   font-size: 8px;
@@ -365,8 +365,8 @@
 
 .airspace-explorer .airspace-token > small {
   position: absolute;
-  top: 46px;
-  left: 52px;
+  top: 41px;
+  left: 49px;
   color: var(--airspace-muted);
   font-size: 7px;
   white-space: nowrap;
