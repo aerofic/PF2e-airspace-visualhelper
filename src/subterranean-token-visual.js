@@ -1,11 +1,14 @@
 import { isZScatterActive, readShapeTranslation } from "./z-scatter-compatibility.js";
 
-const FALLBACK_COLOR = 0xd0d0d0;
+const SUBTERRANEAN_ALPHA = 0.78;
+const FALLBACK_COLOR = 0xf0f0f0;
+const FALLBACK_TINT = 0x909090;
 
 /**
  * Displays a non-interactive copy of a negative-elevation Token above the map.
- * The copy is hosted by TokenLayer rather than the native Token, so Foundry's
- * below-ground Primary occlusion cannot hide it.
+ * The copy is hosted by a dedicated TokenLayer overlay rather than the native
+ * Primary mesh, so below-ground occlusion cannot hide it. The overlay remains
+ * outside TokenLayer#objects, whose children must all be real Token placeables.
  */
 export class SubterraneanTokenVisual {
   constructor(token, { parent = token?.parent } = {}) {
@@ -47,11 +50,10 @@ export class SubterraneanTokenVisual {
     if (this.sprite && isUsableTexture(texture)) {
       syncSprite(this.sprite, this.token, texture, offset);
       this.sprite.visible = true;
-      hide(this.graphics);
     } else {
       hide(this.sprite);
-      drawFallback(this.graphics, this.token, offset);
     }
+    drawFallback(this.graphics, this.token, offset);
   }
 
   destroy() {
@@ -120,8 +122,8 @@ function syncSprite(sprite, token, texture, offset) {
   sprite.width = positive(mesh?.width, positive(size.width, 1));
   sprite.height = positive(mesh?.height, positive(size.height, 1));
   sprite.rotation = finite(mesh?.rotation);
-  sprite.tint = 0xffffff;
-  sprite.alpha = 1;
+  sprite.tint = FALLBACK_TINT;
+  sprite.alpha = SUBTERRANEAN_ALPHA;
 }
 
 function drawFallback(graphics, token, offset) {

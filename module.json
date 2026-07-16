@@ -2,7 +2,7 @@
   "id": "pf2e-flying-visual-helper",
   "title": "PF2e Flying Visual Helper",
   "description": "A PF2e flight visual aid with lifted same-grid Tokens, strong takeoff-point texture shadows, native elevation labels, and an orbitable transparent 3D ApplicationV2 airspace explorer for Foundry VTT v14.",
-  "version": "0.6.13",
+  "version": "0.6.14",
   "compatibility": {
     "minimum": "14.360",
     "verified": "14.363"

@@ -47,6 +47,13 @@ class FakeContainer {
     return child;
   }
 
+  addChildAt(child, index) {
+    child.removeFromParent();
+    child.parent = this;
+    this.children.splice(index, 0, child);
+    return child;
+  }
+
   removeFromParent() {
     if (!this.parent) return this;
     const index = this.parent.children.indexOf(this);
@@ -926,10 +933,13 @@ class FakeMotionQuery {
 }
 
 function makeCanvas(scene, tokens, ticker) {
+  const tokenLayer = new FakeContainer();
+  tokenLayer.placeables = tokens;
+  tokenLayer.objects = tokenLayer.addChild(new FakeContainer());
   return {
     ready: true,
     scene,
-    tokens: { placeables: tokens, objects: new FakeContainer() },
+    tokens: tokenLayer,
     grid: { size: 100, distance: 5 },
     dimensions: { size: 100, distance: 5 },
     primary: new FakeContainer(),
@@ -997,8 +1007,11 @@ test("keeps negative-elevation Token artwork visible above the map", () => {
   layer.activate(readyCanvas);
 
   assert.equal(readyCanvas.primary.children.length, 0);
-  assert.equal(readyCanvas.tokens.objects.children.length, 1);
-  const subterranean = readyCanvas.tokens.objects.children[0];
+  assert.equal(readyCanvas.tokens.objects.children.length, 0, "TokenLayer#objects must contain only real Tokens");
+  assert.equal(readyCanvas.tokens.children.length, 2);
+  const overlay = readyCanvas.tokens.children[0];
+  assert.equal(readyCanvas.tokens.children[1], readyCanvas.tokens.objects);
+  const subterranean = overlay.children[0];
   assert.equal(subterranean.visible, true);
   assert.equal(subterranean.children[0].texture, token.mesh.texture);
 
@@ -1006,5 +1019,6 @@ test("keeps negative-elevation Token artwork visible above the map", () => {
   layer.onUpdateToken(token.document, { elevation: 0 }, { animate: false }, "user");
   assert.equal(subterranean.visible, false);
   layer.deactivate(readyCanvas);
+  assert.equal(readyCanvas.tokens.children.length, 1);
   assert.equal(readyCanvas.tokens.objects.children.length, 0);
 });

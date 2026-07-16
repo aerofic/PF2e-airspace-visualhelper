@@ -52,26 +52,29 @@ test("classifies only finite negative elevation as subterranean", () => {
   assert.equal(isSubterraneanElevation(Infinity), false);
 });
 
-test("renders a full-color non-interactive sibling when the native Token is hidden", () => {
-  const objects = new Container();
+test("renders a neutral non-interactive underground state in a dedicated overlay", () => {
+  const overlay = new Container();
   const token = makeToken(-5);
-  objects.addChild(token);
   token.visible = false;
   token.renderable = false;
   const originalHitArea = { contains: () => true };
   token.hitArea = originalHitArea;
 
-  const visual = new SubterraneanTokenVisual(token, { parent: objects });
-  assert.strictEqual(visual.container.parent, objects);
-  assert.equal(objects.children.indexOf(visual.container), objects.children.indexOf(token) - 1);
+  const visual = new SubterraneanTokenVisual(token, { parent: overlay });
+  assert.strictEqual(visual.container.parent, overlay);
+  assert.deepEqual(overlay.children, [visual.container]);
   assert.equal(visual.container.visible, true);
   assert.equal(visual.container.eventMode, "none");
   assert.equal(visual.sprite.visible, true);
   assert.strictEqual(visual.sprite.texture, token.mesh.texture);
-  assert.equal(visual.sprite.tint, 0xffffff);
-  assert.equal(visual.sprite.alpha, 1);
+  assert.equal(visual.sprite.tint, 0x909090);
+  assert.equal(visual.sprite.alpha, 0.78);
+  assert.equal(visual.sprite.filters, undefined);
+  assert.equal(visual.graphics.visible, true);
+  assert.deepEqual(visual.graphics.commands[0], ["lineStyle", { width: 3, color: 0xf0f0f0, alpha: 0.95 }]);
   assert.strictEqual(token.hitArea, originalHitArea);
   visual.destroy();
+  assert.equal(overlay.children.length, 0);
 });
 
 test("hides without leaking and falls back while texture is unusable", () => {

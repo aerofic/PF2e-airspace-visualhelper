@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.14 — Distinct Subterranean State
+
+- Makes finite negative-elevation Token artwork neutrally tinted and semi-transparent while preserving its full texture silhouette above the main map.
+- Adds a persistent neutral footprint outline so underground units are immediately distinguishable from ground-level Tokens without changing interaction or rules.
+- Hosts underground artwork in a dedicated TokenLayer overlay instead of polluting Foundry's Token-only `objects` collection, preventing elevation-sort refresh failures.
+
 ## 0.6.13 — Visible Subterranean Tokens
 
 - Keeps finite negative-elevation Token artwork visible above the main map by rendering a non-interactive full-color sibling in the TokenLayer.

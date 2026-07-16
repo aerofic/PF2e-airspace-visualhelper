@@ -15,6 +15,7 @@ export class FlyingVisualLayer {
   #canvas = null;
   #visuals = new Map();
   #subterraneanVisuals = new Map();
+  #subterraneanRoot = null;
   // A single shared ticker drives both fallback elevation tweens and the
   // inexpensive idle drift of visible airborne Tokens. Individual visuals
   // never register their own PIXI ticker callbacks.
@@ -261,12 +262,47 @@ export class FlyingVisualLayer {
     }
     if (!visual || visual.destroyed) {
       visual?.destroy?.();
+      const parent = this.#ensureSubterraneanRoot();
+      if (!parent) return;
       visual = new SubterraneanTokenVisual(token, {
-        parent: this.#canvas?.tokens?.objects ?? token.parent
+        parent
       });
       this.#subterraneanVisuals.set(token, visual);
     }
     visual.render({ elevation });
+  }
+
+  /**
+   * Host underground artwork beside TokenLayer#objects, never inside it.
+   * Foundry requires every child of #objects to be a real Token placeable and
+   * its elevation sorter dereferences child.document on every sort pass.
+   */
+  #ensureSubterraneanRoot() {
+    const tokenLayer = this.#canvas?.tokens;
+    const objects = tokenLayer?.objects;
+    const Container = globalThis.PIXI?.Container;
+    if (!tokenLayer || !objects || typeof Container !== "function") return null;
+    if (this.#subterraneanRoot && !this.#subterraneanRoot.destroyed) {
+      if (this.#subterraneanRoot.parent === tokenLayer) return this.#subterraneanRoot;
+      this.#subterraneanRoot.destroy?.({ children: true });
+    }
+
+    const root = new Container();
+    root.label = "pf2e-flying-visual-helper.subterranean";
+    root.eventMode = "none";
+    root.interactive = false;
+    root.interactiveChildren = false;
+    root.sortableChildren = true;
+
+    const objectsIndex = Array.isArray(tokenLayer.children) ? tokenLayer.children.indexOf(objects) : -1;
+    if ((objectsIndex >= 0) && (typeof tokenLayer.addChildAt === "function")) {
+      tokenLayer.addChildAt(root, objectsIndex);
+    } else if (typeof tokenLayer.addChild === "function") {
+      tokenLayer.addChild(root);
+    } else return null;
+
+    this.#subterraneanRoot = root;
+    return root;
   }
 
   #removeSubterraneanVisual(token) {
@@ -363,6 +399,8 @@ export class FlyingVisualLayer {
     this.#visuals.clear();
     for (const visual of this.#subterraneanVisuals.values()) visual.destroy();
     this.#subterraneanVisuals.clear();
+    this.#subterraneanRoot?.destroy?.({ children: true });
+    this.#subterraneanRoot = null;
   }
 }
 
