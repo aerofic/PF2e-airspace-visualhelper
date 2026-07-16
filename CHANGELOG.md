@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0 — Stable Subterranean Token Visibility
+
+- Keeps finite negative-elevation Token artwork visible above the main map in a dedicated, non-interactive TokenLayer overlay.
+- Uses a neutral semi-transparent treatment and persistent footprint outline to distinguish underground units from ground-level Tokens.
+- Fixes a severe Canvas freeze by keeping helper display objects outside Foundry's Token-only `TokenLayer.objects` collection.
+- Preserves Token selection, Target, movement, vision, distance, PF2e rules, positive-flight visuals, Z Scatter composition, and the 3D airspace window.
+- Adds versioned Foundry manifest and download metadata for online installation and future update checks.
+
 ## 0.6.14 — Distinct Subterranean State
 
 - Makes finite negative-elevation Token artwork neutrally tinted and semi-transparent while preserving its full texture silhouette above the main map.
